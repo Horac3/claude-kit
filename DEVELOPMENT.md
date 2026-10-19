@@ -84,6 +84,8 @@ tests/run.sh                 self-tests (119); KIT_TEST_TS=1 adds a real pnpm + 
 
 ## Open items (in priority order)
 
+0. **Licence notices and credits:** see `tasks/01-licensing-and-credits.md`. It is a self-contained prompt; run it first.
+
 1. **Public-repo cleanup.**
    - Replace `examples/keepsake/` with a fictional example project; the current one exposes a real product's retention and compliance details.
    - Add a LICENSE (MIT suggested).
