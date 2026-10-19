@@ -127,15 +127,32 @@ one-line description of the product:
 /kickoff A booking API for small clinics: patients book, clinics confirm, SMS reminders.
 ```
 
-`/kickoff` runs on Opus and does five things. Expect a few questions along the way:
+`/kickoff` runs on Opus. It checks whether the repo is **new** (fewer than about 10 source files) or **existing**, and adapts.
+Expect a few questions along the way.
 
-1. **Maps the code** (if there is any) into `docs/architecture.md`, so later sessions don't re-explore.
-2. **Asks you a short round of questions** the code can't answer: product, constraints, architecture rules, commit scopes.
-3. **Fills in `CLAUDE.md`**, replacing every `TODO(kickoff)` and keeping the file under ~120 lines.
-4. **Checks your commands** by running `.claude/kit/check.sh all`, and fixes `.claude/kit/commands.env` until typecheck, lint, and test either pass or fail for real reasons.
-5. **Drafts a roadmap** in `docs/progress.md`. Each step is one conversation's worth of work (1–5 behaviours).
-   If you have requirements, put them in `docs/requirements.md` first (the template is there) and
-   `/kickoff` groups them into steps. Otherwise it drafts requirements with you.
+**New project:**
+
+1. **Asks you a short round of questions:** product, users, constraints, architecture rules, commit scopes.
+2. **Fills in `CLAUDE.md`**, replacing every `TODO(kickoff)` and keeping the file under ~120 lines.
+3. **Drafts requirements** with you in `docs/requirements.md`.
+4. **Checks your commands** and **drafts the roadmap** (below).
+
+**Existing project.** It gathers context before asking you anything:
+
+1. **Reads what's already known.** That means git history (recent commits, the most-changed files, active branches, TODO clusters, open issues if `gh` is set up), your README and CONTRIBUTING, ADR titles, and rule files for other AI tools (`AGENTS.md`, `.cursorrules`, Copilot instructions, …).
+   A script gathers most of this, so it costs very little.
+2. **Maps the code** with parallel helper agents into `docs/architecture.md`, and flags anywhere the code contradicts the docs.
+3. **Asks only about gaps and contradictions,** and what you want to work on next.
+4. **Handles your existing `CLAUDE.md` carefully.** If you already had one, it backs it up to `docs/CLAUDE.md.pre-kit`.
+   Then it shows you a table of where each section goes (kept, moved to a rule file that loads only for matching paths, moved to a doc, or dropped because a kit rule already says it). It changes nothing until you approve.
+5. **Builds the roadmap from work in flight** and writes requirements only for what you choose to do next.
+   If a step touches a heavily-changed file with few tests, it suggests pinning current behaviour with tests first.
+
+**Both then:**
+- **Checks your commands** by running `.claude/kit/check.sh all`, and fixes `.claude/kit/commands.env` until typecheck, lint, and test either pass or fail for real reasons.
+- **Drafts a roadmap** in `docs/progress.md`. Each step is one conversation's worth of work (1–5 behaviours).
+  If you have requirements, put them in `docs/requirements.md` first (the template is there) and
+  `/kickoff` groups them into steps. Otherwise it drafts requirements with you.
 
 Review the roadmap when it's shown, approve it, then commit:
 
@@ -241,6 +258,39 @@ Use these on their own, outside the `/next` loop:
 | `/decide <question>` | `/decide Postgres advisory locks vs a Redis lock for the purge job` | Opus weighs the options in a separate context and returns a decision record. Approve it to append to `docs/decisions.md`. |
 | `/commit [note]` | `/commit` | Grouped Conventional Commits; you confirm each. |
 | `/handoff` | `/handoff` | Write state to `docs/progress.md` now. |
+| `/remap [area\|full]` | `/remap` | Refresh `docs/architecture.md` from what changed in git since it was last mapped. Run it when the session start says the map is stale, or after a big restructure. |
+| `/ui <screen>` *(TS projects)* | `/ui booking form with date picker and confirmation` | A short design brief, then a test-first build, then a screenshot check at desktop and mobile widths by the `ui-checker` subagent. See [§8.1](#81-frontend-work-ui). |
+
+### 8.1 Frontend work: `/ui`
+
+In TypeScript projects the kit adds frontend rules (accessibility, the four data states, design tokens, mobile-first),
+a `/ui` command, and a `ui-checker` subagent that actually **looks** at the page.
+
+One-time setup in the project (the subagent needs a browser):
+
+```bash
+pnpm add -D -E playwright @axe-core/playwright   # or npm i -D -E / yarn add -D -E / bun add -d --exact
+pnpm exec playwright install chromium
+```
+
+Then start your dev server and run, for example:
+
+```
+/ui pricing page with three plans and a monthly/yearly toggle
+```
+
+Claude writes a 5–8 line brief (purpose, layout, states, components to reuse) and builds it test-first.
+Then it asks `ui-checker` to screenshot the page. The subagent runs `node .claude/kit/shot.mjs <url>`, looks at the images, and reports:
+
+```
+VERDICT: fix first (2)
+- [blocking] horizontal overflow at 390px — pricing table — let the table scroll inside its container
+- [blocking] "Choose plan" contrast too low on the highlighted card — use the on-primary token
+```
+
+Blocking items are fixed and re-checked, for at most 3 rounds. The screenshots stay in `.claude/kit/logs/shots/`
+for you to look at. They never enter your main conversation, so visual review doesn't inflate your context.
+You can run the screenshot script yourself too: `node .claude/kit/shot.mjs http://localhost:5173 --dark --full`.
 
 Useful built-in Claude Code commands that fit this workflow: `/context` (what is using your context), `/usage`
 (token use and cost), `/rewind` (undo to a checkpoint), `/hooks` (inspect hooks).
@@ -337,6 +387,9 @@ Then review with `git diff` and commit: `chore: update claude-kit to 1.x.y`. See
 | `check.sh: missing .claude/kit/commands.env` | Re-run the installer. It only adds files that are missing. |
 | `check.sh` fails with "command not found" | The command in `commands.env` doesn't match your repo (wrong package manager, no `typecheck` script). Fix it there, or run `/kickoff` step 4 again by asking Claude to verify the check commands. |
 | Tests pass in your terminal but `check.sh` says FAIL | Read `.claude/kit/logs/<target>.log`. `check.sh` runs with `CI=1` and no colour, which some tools treat differently. |
+| `shot.mjs: the project has no playwright package` | Run the one-time setup in [§8.1](#81-frontend-work-ui). |
+| `shot.mjs: could not start Chromium` | Run `pnpm exec playwright install chromium`, or point `CHROMIUM_PATH` at an installed Chrome or Chromium. |
+| Session start says the architecture map is stale | Run `/remap`. It updates only the parts that changed. |
 | `bad interpreter` or `$'\r': command not found` (Windows) | The scripts have CRLF line endings. Re-clone the kit with LF endings (see [step 2](#2-get-the-kit)) and re-run the installer. |
 | A legitimate command gets blocked | Run it yourself with `!`. If the pattern is too broad for your project, open an issue with the command. |
 | `/next` says the tree is dirty | It stops before touching anything. Commit, stash, or tell it how to proceed. |
@@ -348,8 +401,9 @@ The installer never deletes, so uninstalling is manual. These are the kit's file
 
 ```bash
 # Review this list first: git rm keeps everything in history, so you can always get it back.
-git rm -r .claude/skills/{kickoff,next,tdd,fix,handoff,review,decide,commit} \
+git rm -r .claude/skills/{kickoff,next,tdd,fix,handoff,review,decide,commit,remap} \
           .claude/agents/{test-runner,reviewer,researcher,debugger}.md \
+          .claude/skills/ui .claude/agents/ui-checker.md \
           .claude/hooks .claude/kit .claude/rules/kit
 ```
 

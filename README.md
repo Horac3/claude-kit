@@ -20,7 +20,7 @@ cd ~/code/my-project && claude                    # then: /kickoff
 ## The loop
 
 ```
-/kickoff        once per project: map the code, fill CLAUDE.md, verify checks, draft the roadmap
+/kickoff        once per project: gather context, map the code, fill or slim CLAUDE.md, verify checks, draft the roadmap
   /clear
 /next           plan the next step (Opus, plan mode) → approve → build test-first (Sonnet)
   /tdd          Red → Green → Refactor, one behaviour per cycle   (used inside /next, or standalone)
@@ -30,6 +30,8 @@ cd ~/code/my-project && claude                    # then: /kickoff
   /handoff      writes Current step + Handoff notes into docs/progress.md
   /clear        free; the next /next picks up exactly where you left off
 /decide <q>     an irreversible or cross-cutting decision, thought through on Opus in a fork → ADR
+/remap          refresh docs/architecture.md from git changes since it was last mapped
+/ui <screen>    (TS projects) design brief → test-first build → screenshot check by a subagent
 ```
 
 The status line shows `model · ctx % · cost · branch · current step`. Context turns **yellow at 50%**
@@ -49,6 +51,8 @@ The main session runs `opusplan`: Opus while in plan mode, Sonnet once you appro
 | Non-obvious failure | `debugger` subagent | Sonnet · high |
 | End-of-step review | `reviewer` via `/review` | Opus · high |
 | Big decisions | `/decide` (forked) | Opus · high |
+| Refresh the codebase map | `/remap` (forked) | Sonnet · medium |
+| Look at UI screenshots | `ui-checker` subagent | Sonnet · medium |
 | One-time project setup | `/kickoff` (first message of a fresh session) | Opus · high |
 
 **Why never switch the main model mid-conversation:** the prompt cache is per model. If you switch
@@ -68,6 +72,9 @@ Skills that pin a model (`/kickoff`, `/tdd`) are designed to run at the start of
 | SessionStart hook | About 5 lines (branch, current step, next action) instead of Claude reading `progress.md` to orient itself. After compaction it re-injects the same lines. |
 | `/handoff` + `/clear` | `/compact` reads the whole conversation to summarise it, while `/clear` is free. Handoff notes in a file are cheaper and more reliable than a summary. |
 | `docs/architecture.md` | `/kickoff` maps the codebase once, so later sessions read about 120 lines instead of re-exploring. |
+| `context.sh` | The shell gathers layout, existing docs and AI-tool rules, ADR titles, git hotspots, active branches, TODO density and drift. Claude reads a summary of a few dozen lines instead of spending tool calls finding them. |
+| `/remap` on drift | It updates only the parts of the map whose directories changed since the `mapped-at` commit, in a forked context. The session hook says when the map is stale (15 or more structural changes, or 60 or more commits). |
+| `ui-checker` subagent | Screenshots are images and cost tokens. The subagent looks at them and returns about 20 lines of findings, so the main conversation never holds an image. |
 
 ## What gets installed
 
@@ -80,18 +87,22 @@ docs/requirements.md               project  — FR-AREA-NN template
 .claude/kit/commands.env           project  — your typecheck/lint/test commands (per stack, per package manager)
 .claude/kit/check.sh               kit      — filtered check runner
 .claude/kit/statusline.sh          kit
+.claude/kit/context.sh             kit      — layout, existing docs/rules, git history, drift (used by /kickoff, /remap, the session hook)
 .claude/kit/manifest               kit      — hashes for safe updates
 .claude/hooks/guard-bash.sh        kit      — blocks rm, git clean/reset --hard/restore, force push, find -delete, .env reads…
 .claude/hooks/guard-files.sh       kit      — blocks .env, lockfiles, .git/, AGENTS.md, the guard config, Write over tracked files
 .claude/hooks/session-context.sh   kit
-.claude/skills/{kickoff,next,tdd,fix,handoff,review,decide,commit}/SKILL.md   kit
-.claude/agents/{test-runner,reviewer,researcher,debugger}.md                  kit
+.claude/skills/{kickoff,next,tdd,fix,handoff,review,decide,commit,remap}/SKILL.md   kit
+.claude/skills/kickoff/existing.md                                                  kit  — loaded only for existing codebases
+.claude/agents/{test-runner,reviewer,researcher,debugger}.md                        kit
+.claude/skills/ui/SKILL.md · agents/ui-checker.md · kit/shot.mjs                    kit  — ts and both stacks
 .claude/rules/kit/working-rules.md   always     safety, working loop, test rules
 .claude/rules/kit/model-routing.md   always     the table above + token rules
 .claude/rules/kit/hexagonal.md       on demand  **/domain/**, **/ports/**, **/adapters/**, **/core/**
 .claude/rules/kit/docker.md          on demand  Dockerfiles, compose files (nginx-proxy pattern)
 .claude/rules/kit/go.md              on demand  **/*.go            (go and both stacks)
 .claude/rules/kit/typescript.md      on demand  **/*.ts(x), package.json, tsconfig   (ts and both stacks)
+.claude/rules/kit/frontend.md        on demand  **/*.{tsx,jsx,vue,svelte,css,scss,html}  (ts and both stacks)
 ```
 
 The installer also adds `.claude/settings.local.json`, `.claude/kit/logs/`, `CLAUDE.local.md` and `*.kit-new` to `.gitignore`.
@@ -131,13 +142,32 @@ destructive command, run it yourself: type `!` before it in Claude Code, or use 
 - Go projects: `golangci-lint` is used if installed; otherwise lint falls back to a `gofmt -l` check.
   `go test -race` needs cgo and a C compiler, so the kit leaves it to CI or Docker.
 
-## Migrating an existing project (e.g. Keepsake)
+## Existing projects
+
+`/kickoff` notices when a repo already has code and switches to an existing-project procedure
+(`skills/kickoff/existing.md`, loaded only in that case):
+
+1. **Reads what is already known, cheapest first.** It starts with git history (recent commits, hotspots, active branches, TODO clusters, open issues through `gh`).
+   Then it reads instruction files written for other AI tools (`AGENTS.md`, `.cursorrules`, `.cursor/rules`, Copilot instructions, `GEMINI.md`), the README and CONTRIBUTING, and ADR titles.
+2. **Maps the code with parallel Haiku `Explore` agents.** They are briefed with the layout, hotspots and what the docs already claim, so they verify and fill gaps rather than start cold, and they report any place where the code contradicts the docs.
+   The result is `docs/architecture.md`, stamped with a `mapped-at` commit.
+3. **Asks only about gaps and contradictions,** plus what you want to work on next.
+4. **Slims a pre-existing `CLAUDE.md` instead of replacing it.** It first backs it up to `docs/CLAUDE.md.pre-kit`.
+   Then it shows a table of every original section and where it went: dropped as a duplicate of a kit rule, moved to a path-scoped rule, moved to a reference doc, or kept. No rule disappears without a row in that table.
+5. **Links existing ADRs** from `docs/decisions.md` instead of copying them.
+6. **Builds the roadmap from work already in flight** (branches, commit themes, TODOs, issues) and writes requirements only for the work you pick.
+   Before changing a hotspot that has thin tests, it proposes a characterisation-test step first.
+
+Afterwards, `/remap` keeps the map current from `git diff` since the `mapped-at` commit. It also reports paths named in
+`CLAUDE.md` or the map that no longer exist.
+
+### Migrating from your own Claude Code setup (e.g. Keepsake)
 
 1. `~/claude-kit/install.sh ~/code/keepsake`. Your `CLAUDE.md`, `.claude/settings.json` and `docs/progress.md` are kept,
    and the kit's versions arrive as `*.kit-new` for reference.
 2. Your old `.claude/skills/{next,tdd}` and `agents/{test-runner,reviewer}` have the same names as the kit's, so the kit's
    versions arrive as `.kit-new` and you choose which to keep. The kit's versions are generalised and add `check.sh`, `/handoff`, and injection.
-3. Slim `CLAUDE.md`. `examples/keepsake/` shows the result: generic sections removed (they now live in `rules/kit/`),
+3. Run `/kickoff` to slim `CLAUDE.md` (step 4 above). `examples/keepsake/` shows the result: generic sections removed (they now live in `rules/kit/`),
    retention and payments moved to path-scoped rules. The always-loaded context shrinks by about 20% even with the added rules.
 4. Merge hooks and the status line from `.claude/settings.json.kit-new` into your `settings.json`.
 5. Set `.claude/kit/commands.env` to `pnpm -r --if-present run typecheck|lint|test`.
@@ -145,7 +175,8 @@ destructive command, run it yourself: type `!` before it in Claude Code, or use 
 ## Developing the kit
 
 ```
-tests/run.sh                # installer, update flow, guards (40+ cases), session hook, check runner, status line
+tests/run.sh                # installer, update flow, guards (40+ cases), session hook, check runner, status line,
+                            # context gatherer, drift and staleness detection
 KIT_TEST_TS=1 tests/run.sh  # also builds a real pnpm + vitest project (needs network)
 ```
 

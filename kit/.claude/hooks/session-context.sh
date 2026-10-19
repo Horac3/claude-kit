@@ -26,6 +26,9 @@ else
   echo "[claude-kit] no docs/progress.md yet: run /kickoff to set the project up."
 fi
 
+stale="$(bash "$root/.claude/kit/context.sh" stale 2>/dev/null)"
+[ -n "$stale" ] && echo "[claude-kit] $stale"
+
 case "$source_" in
   compact)
     echo "[claude-kit] Context was just compacted. Re-read only what the current step needs; if the handoff notes are stale, run /handoff before continuing." ;;

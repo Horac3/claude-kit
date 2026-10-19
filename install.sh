@@ -188,6 +188,7 @@ gen_settings() {
   local -a allow=(
     "Bash(.claude/kit/check.sh)" "Bash(.claude/kit/check.sh *)"
     "Bash(bash .claude/kit/check.sh *)" "Bash(./.claude/kit/check.sh *)"
+    "Bash(.claude/kit/context.sh *)" "Bash(bash .claude/kit/context.sh *)"
     "Bash(git status)" "Bash(git status *)" "Bash(git diff)" "Bash(git diff *)"
     "Bash(git log *)" "Bash(git show *)" "Bash(git branch --show-current)"
     "Bash(git ls-files *)" "Bash(git rev-parse *)" "Bash(git blame *)"
@@ -211,7 +212,8 @@ gen_settings() {
   if [ "$stack" != go ]; then
     local x
     case "$pm" in pnpm) x="pnpm exec" ;; npm) x="npx" ;; yarn) x="yarn" ;; bun) x="bunx" ;; esac
-    allow+=("Bash($x tsc --noEmit *)" "Bash($x vitest run *)" "Bash($pm ls *)" "Bash($pm why *)")
+    allow+=("Bash($x tsc --noEmit *)" "Bash($x vitest run *)" "Bash($pm ls *)" "Bash($pm why *)"
+      "Bash(node .claude/kit/shot.mjs *)")
     ask+=("Bash($pm add *)" "Bash($pm install *)" "Bash($pm remove *)" "Bash($pm update *)"
       "Bash($pm run *)" "Bash($pm dlx *)" "Bash(npx *)" "Bash($x prettier --write *)")
   fi

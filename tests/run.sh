@@ -195,6 +195,55 @@ echo "# My rules" >CLAUDE.md
 [ -f .claude/rules/kit/typescript.md ] && ok "ts stack detected" || ko "ts stack detected"
 grep -q "pnpm run --if-present test" .claude/kit/commands.env && ok "uses existing test script" || ko "uses existing test script" "$(cat .claude/kit/commands.env)"
 
+[ -f .claude/skills/ui/SKILL.md ] && [ -f .claude/agents/ui-checker.md ] && [ -f .claude/kit/shot.mjs ] &&
+  ok "ts project gets frontend layer" || ko "ts project gets frontend layer"
+[ ! -f "$P/.claude/skills/ui/SKILL.md" ] && ok "go project has no frontend layer" || ko "go project has no frontend layer"
+node --check .claude/kit/shot.mjs 2>/dev/null && ok "shot.mjs parses" || ko "shot.mjs parses"
+
+echo "== context gatherer (existing project)"
+E="$WORK/legacy"; mkdir -p "$E/internal/billing" "$E/cmd/api" "$E/docs/adr"; cd "$E" || exit 1
+git init -q -b main && git config user.email t@t && git config user.name t
+printf 'module example.com/legacy\n\ngo 1.22\n' >go.mod
+for i in 1 2 3 4 5 6 7 8 9 10 11; do printf 'package billing\n\n// TODO: tidy %s\nfunc F%s() {}\n' $i $i >internal/billing/f$i.go; done
+printf 'package main\n\nfunc main() {}\n' >cmd/api/main.go
+printf '# Legacy\nRun with make.\n' >README.md
+printf '# Use Postgres\nWe chose Postgres.\n' >docs/adr/0001-use-postgres.md
+printf 'Always use tabs.\nNever touch generated code.\n' >.cursorrules
+printf '# Old CLAUDE\n- rule one\n' >CLAUDE.md
+git add -A && git commit -qm "initial legacy"
+for i in 1 2 3; do echo "// change $i" >>internal/billing/f1.go; git commit -qam "billing: change $i"; done
+"$KIT/install.sh" "$E" >/dev/null 2>&1
+C=.claude/kit/context.sh
+[ "$($C mode)" = existing ] && ok "detects existing project" || ko "detects existing project" "$($C mode)"
+out="$($C existing)"
+contains "$out" ".cursorrules" "finds other AI-tool rules"
+contains "$out" "CLAUDE.md.kit-new present" "notices pre-existing CLAUDE.md"
+contains "$out" "Use Postgres" "lists ADR titles"
+contains "$out" "README.md" "lists project docs"
+out="$($C history 5)"
+contains "$out" "internal/billing/f1.go (4 commits)" "finds hotspots"
+contains "$out" "billing: change 3" "lists recent commits"
+contains "$out" "TODO / FIXME" "reports TODO density"
+out="$($C layout)"
+contains "$out" "internal/" "layout lists directories"
+[ "$(cd "$WORK/goproj" && .claude/kit/context.sh mode)" = greenfield ] && ok "small project is greenfield" || ko "small project is greenfield"
+grep -q 'existing.md' .claude/skills/kickoff/SKILL.md && [ -f .claude/skills/kickoff/existing.md ] && ok "kickoff ships existing-project procedure" || ko "kickoff existing.md"
+
+echo "== drift and staleness"
+sha="$(git rev-parse --short HEAD)"
+printf '<!-- mapped-at: %s 2026-01-01 -->\n# Architecture\n- Billing: `internal/billing/`\n- Legacy worker: `internal/worker/run.go`\n' "$sha" >docs/architecture.md
+[ -z "$($C stale)" ] && ok "fresh map is silent" || ko "fresh map is silent"
+mkdir -p internal/payments
+for i in $(seq 1 16); do printf 'package payments\n' >internal/payments/p$i.go; done
+git add -A && git commit -qm "add payments"
+out="$($C drift)"
+contains "$out" "internal/payments: 16 added" "drift groups structural changes"
+contains "$out" "internal/worker/run.go" "drift flags dangling paths"
+contains "$($C stale)" "run /remap" "stale map detected"
+out="$(printf '{"source":"startup"}' | CLAUDE_PROJECT_DIR="$E" bash .claude/hooks/session-context.sh)"
+contains "$out" "run /remap" "session hook surfaces stale map"
+[ -f .claude/skills/remap/SKILL.md ] && ok "remap skill installed" || ko "remap skill installed"
+
 if [ "${KIT_TEST_TS:-0}" = 1 ] && command -v pnpm >/dev/null; then
   echo "== check runner: real TypeScript project (pnpm + vitest)"
   T="$WORK/tsproj"; mkdir -p "$T/src"; cd "$T" || exit 1; git init -q

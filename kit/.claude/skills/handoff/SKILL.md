@@ -27,6 +27,8 @@ session reads this cold.
    ```
 4. **"## Log"** — append one line: `- YYYY-MM-DD step N <done|partial> (<short commit hash or "uncommitted">)`.
 5. If a decision was made, append it to `docs/decisions.md` too.
+6. If this step added, removed or renamed packages, modules or top-level directories, add
+   `- Run /remap: <what moved>` to the handoff notes.
 
 Commit only if the user has asked for commits in this session: `docs: update progress after step N`.
 

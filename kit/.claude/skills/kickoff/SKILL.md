@@ -1,6 +1,6 @@
 ---
 name: kickoff
-description: One-time project setup after installing claude-kit — map the codebase, fill in CLAUDE.md, verify the check commands, and draft the roadmap in docs/progress.md.
+description: One-time project setup after installing claude-kit — gather context (existing code, docs, other AI-tool rules, git history), fill or slim CLAUDE.md, verify the check commands, and draft the roadmap in docs/progress.md.
 argument-hint: "[short product description]"
 disable-model-invocation: true
 model: opus
@@ -10,45 +10,46 @@ effort: high
 Set this project up for the claude-kit workflow. Run this as the first message of a fresh session.
 Product description from the user (may be empty): $ARGUMENTS
 
-## Snapshot
+## Snapshot (gathered by script; do not re-gather it with tools)
 ```!
-echo "--- top level"; ls -A 2>/dev/null | head -40
-echo "--- manifests"; ls go.mod go.work package.json pnpm-workspace.yaml pnpm-lock.yaml package-lock.json yarn.lock bun.lock* Makefile Taskfile.yml docker-compose*.yml compose*.yml 2>/dev/null
-echo "--- tracked files"; git ls-files 2>/dev/null | wc -l
-echo "--- commands.env"; grep -E '^CHECK_' .claude/kit/commands.env 2>/dev/null
-echo "--- CLAUDE.md placeholders"; grep -n 'TODO(kickoff)' CLAUDE.md 2>/dev/null | head -20
+echo "mode: $(.claude/kit/context.sh mode 2>/dev/null)"
+.claude/kit/context.sh layout 2>/dev/null
+.claude/kit/context.sh existing 2>/dev/null
+echo "## Check commands"; grep -E '^CHECK_' .claude/kit/commands.env 2>/dev/null
+echo "## progress.md headings"; grep -E '^## ' docs/progress.md 2>/dev/null
 true
 ```
 
-## 1. Map existing code (skip for an empty repo)
-If there is real code, launch up to 3 `Explore` subagents in parallel (entry points and wiring;
-domain and data model; tests, build and deploy). Ask each for ≤150 words with file paths.
-Write the result to `docs/architecture.md` (≤120 lines): purpose, layout tree (2 levels), how a request
-flows, where the domain lives, how tests run, how it deploys, known debt. Future sessions read this
-instead of re-exploring.
+**If mode is `existing`, follow [existing.md](existing.md) instead of steps 1–3 below**, then continue at step 4.
+It covers reading existing docs and rules, git history, slimming a pre-existing CLAUDE.md, and
+building the roadmap from work already in flight.
 
-## 2. Interview (one round)
-Ask the user, in one AskUserQuestion batch where possible, only what the code and docs cannot tell you:
-product in two sentences, launch market and constraints, non-negotiable architecture rules, commit
-scopes, anything Claude must never do in this repo. Skip questions already answered by `$ARGUMENTS` or files.
+## 1. Interview (greenfield; one round)
+Ask, in one AskUserQuestion batch where possible, only what `$ARGUMENTS` does not answer: product in two
+sentences, users and launch market, constraints, non-negotiable architecture rules, commit scopes,
+anything Claude must never do in this repo.
 
-## 3. Fill CLAUDE.md
-Replace every `TODO(kickoff)` in `CLAUDE.md` using Edit. Hard limit: CLAUDE.md stays under ~120 lines.
-Anything long or used only sometimes goes in `docs/` (read on demand) or a path-scoped rule in
-`.claude/rules/<topic>.md` with `paths:` frontmatter (loads only when matching files are touched).
-Do not repeat what `.claude/rules/kit/` already says.
+## 2. Fill CLAUDE.md
+Replace every `TODO(kickoff)` in `CLAUDE.md` using Edit. Hard limit: under ~120 lines. Anything long or
+needed only sometimes goes in `docs/` (read on demand) or in `.claude/rules/<topic>.md` with `paths:`
+frontmatter (loads only when matching files are touched). Do not repeat `.claude/rules/kit/`.
+
+## 3. Requirements
+If `docs/requirements.md` is still the template, draft requirements with the user in its format
+(`FR-AREA-NN`, given/when/then, edge cases). Keep the first version to what the first few steps need.
 
 ## 4. Verify the check commands
 Run `.claude/kit/check.sh all` via `test-runner`. If a command is wrong for this repo (package manager,
-monorepo layout, missing linter), fix `.claude/kit/commands.env` and re-run until each target is
-PASS, FAIL for real reasons, or deliberately empty (SKIP).
+monorepo layout, missing linter), fix `.claude/kit/commands.env` and re-run until each target is PASS,
+FAIL for real reasons (say which), or deliberately empty (SKIP).
 
-## 5. Draft the roadmap
-If `docs/requirements.md` has requirements, group them into roadmap steps in `docs/progress.md`.
-Each step: one conversation's work (1–5 behaviours), ordered by dependency, riskiest domain logic early,
-format `- [ ] N. <title> — <requirement IDs>`. Otherwise draft requirements with the user first, using the
-template in `docs/requirements.md`. Set "Current step" to step 1. Show the roadmap and wait for approval.
+## 5. Roadmap
+Group requirements into steps in `docs/progress.md` under `## Roadmap`, one conversation's work each
+(1–5 behaviours), ordered by dependency, riskiest domain logic early:
+`- [ ] N. <title> — <requirement IDs>`. Set "Current step" to step 1. Show it and wait for approval.
+`docs/progress.md` must keep the headings `## Roadmap`, `## Current step`, `## Handoff notes`, `## Log`;
+add any that are missing with Edit, keeping existing content.
 
 ## 6. Finish
-List files created or changed, then say:
+List files created or changed (and any `*.kit-new` files the user should review), then say:
 `Kickoff complete. Run /clear, then /next to start step 1: <title>.`
