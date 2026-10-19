@@ -14,6 +14,7 @@ cd ~/code/my-project && claude                    # then: /kickoff
 ```
 
 **New here? Follow the step-by-step guide: [HOW_TO_USE.md](HOW_TO_USE.md).**
+Working on the kit itself? Start with [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ---
 
