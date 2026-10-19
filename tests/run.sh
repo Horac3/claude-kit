@@ -199,6 +199,11 @@ grep -q "pnpm run --if-present test" .claude/kit/commands.env && ok "uses existi
   ok "ts project gets frontend layer" || ko "ts project gets frontend layer"
 [ ! -f "$P/.claude/skills/ui/SKILL.md" ] && ok "go project has no frontend layer" || ko "go project has no frontend layer"
 node --check .claude/kit/shot.mjs 2>/dev/null && ok "shot.mjs parses" || ko "shot.mjs parses"
+out="$(.claude/kit/design-pack.sh core motion shadcn 2>&1)"
+contains "$out" "impeccable install" "design pack plans impeccable"
+contains "$out" "--skill web-design-guidelines" "design pack plans vercel guidelines"
+contains "$out" "no components.json" "design pack skips shadcn without components.json"
+contains "$out" "Nothing installed" "design pack is a dry run by default"
 
 echo "== context gatherer (existing project)"
 E="$WORK/legacy"; mkdir -p "$E/internal/billing" "$E/cmd/api" "$E/docs/adr"; cd "$E" || exit 1

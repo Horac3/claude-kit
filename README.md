@@ -95,7 +95,7 @@ docs/requirements.md               project  — FR-AREA-NN template
 .claude/skills/{kickoff,next,tdd,fix,handoff,review,decide,commit,remap}/SKILL.md   kit
 .claude/skills/kickoff/existing.md                                                  kit  — loaded only for existing codebases
 .claude/agents/{test-runner,reviewer,researcher,debugger}.md                        kit
-.claude/skills/ui/SKILL.md · agents/ui-checker.md · kit/shot.mjs                    kit  — ts and both stacks
+.claude/skills/ui/SKILL.md · agents/ui-checker.md · kit/shot.mjs · kit/design-pack.sh   kit  — ts and both stacks
 .claude/rules/kit/working-rules.md   always     safety, working loop, test rules
 .claude/rules/kit/model-routing.md   always     the table above + token rules
 .claude/rules/kit/hexagonal.md       on demand  **/domain/**, **/ports/**, **/adapters/**, **/core/**
@@ -111,6 +111,36 @@ It only appends to that file.
 **Kit files** belong to the kit. **Project files** are yours from the moment they are created.
 Your own rules go in `.claude/rules/<topic>.md`, outside `kit/`, and the kit never touches them.
 Give them `paths:` frontmatter so they load only when relevant (see `examples/keepsake/.claude/rules/`).
+
+## Design pack (optional, TS projects)
+
+The kit's frontend layer handles discipline: tokens, the four data states, accessibility, and a screenshot check by a subagent.
+For **taste**, it relies on the best third-party design skills rather than reinventing them. `design-pack.sh` installs a
+curated set into the project from their upstream sources. Nothing is vendored, and versions are pinned in `skills-lock.json`.
+
+```bash
+.claude/kit/design-pack.sh                    # show the plan (installs nothing)
+.claude/kit/design-pack.sh core --apply       # install
+.claude/kit/design-pack.sh --list             # all packs: core, motion, taste, shadcn, devtools
+```
+
+| Tool | Pack | Why it's in (or not) |
+|---|---|---|
+| [Impeccable](https://github.com/pbakaus/impeccable) | core | Teaches the agent design vocabulary and anti-patterns: `/impeccable shape · critique · audit · polish · document` (writes `DESIGN.md`). Its `impeccable detect` CLI is a deterministic scanner for generic "AI-made" design (purple gradients, gradient text, overused fonts, buzzwords, contrast). The kit's `ui-checker` runs it even without the pack. |
+| [Vercel web-design-guidelines](https://github.com/vercel-labs/agent-skills) | core | Reviews UI code against 100+ interface rules. `/ui` runs it in a subagent, because it fetches a long rule list. |
+| [Anthropic frontend-design](https://github.com/anthropics/claude-code) | core | Official skill for a bold, intentional aesthetic direction. A Claude Code plugin: `/plugin install frontend-design@claude-plugins-official`. |
+| [Emil Kowalski skills](https://github.com/emilkowalski/skills) | motion | Animation craft, animation review, Apple's interface and motion principles for the web, and worst-case-data UI testing. A 4-skill subset of 15. |
+| [taste-skill](https://github.com/Leonxlnx/taste-skill) | taste | Premium-reference layout, type and spacing taste. Overlaps with Impeccable and frontend-design, so it's opt-in. Keep one main "taste" voice. |
+| [shadcn MCP](https://ui.shadcn.com/docs/mcp) | shadcn | Browse and install registry components, rather than having Claude hand-roll them. Only added when `components.json` exists. |
+| [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) | devtools | An interactive browser with console, network and performance traces, for debugging. For routine visual checks, the kit's `shot.mjs` is cheaper. |
+| [DESIGN.md](https://github.com/VoltAgent/awesome-design-md) | convention | Not an install. A `DESIGN.md` at the repo root is treated as the source of truth by the frontend rule, `/ui` and `ui-checker`. Generate one with `/impeccable document`, or start from a reference in awesome-design-md. |
+| [Playwright](https://playwright.dev) | built in | The kit's `shot.mjs` uses it for screenshots, overflow, tap-target and axe checks. |
+| Image-to-code ([screenshot-to-code](https://github.com/abi/screenshot-to-code)) | skipped | A standalone web app, not an agent skill. Claude already reads screenshots and mockups directly. |
+
+**Token note.** Every skill Claude can invoke automatically adds its description to every session. The core pack adds 3,
+and the full set about 8. That's why the packs are opt-in and the motion pack installs a subset. Third-party skills run with
+full agent permissions, so read them before committing. Run the script yourself (or with `!`): installers such as Impeccable
+add hooks to `.claude/settings.json`, which the kit's guards deliberately stop Claude from editing.
 
 ## Updating
 

@@ -292,6 +292,30 @@ Blocking items are fixed and re-checked, for at most 3 rounds. The screenshots s
 for you to look at. They never enter your main conversation, so visual review doesn't inflate your context.
 You can run the screenshot script yourself too: `node .claude/kit/shot.mjs http://localhost:5173 --dark --full`.
 
+`ui-checker` also runs `npx -y impeccable detect`. It's a free, deterministic scan for generic "AI-made" design: purple
+gradients, gradient text, overused fonts like Inter, buzzword copy, and low contrast. It needs nothing installed beyond `npx`.
+
+### 8.2 Add the design pack (optional)
+
+For stronger design taste, install curated third-party design skills into the project. Run this in your terminal,
+not through Claude, because the installers may change `.claude/settings.json`:
+
+```bash
+git add -A && git commit -m "wip"                # the script refuses to run with uncommitted .claude/ changes
+.claude/kit/design-pack.sh                       # see the plan for the core pack
+.claude/kit/design-pack.sh core --apply          # Impeccable + Vercel web-design-guidelines
+.claude/kit/design-pack.sh motion --apply        # optional: Emil Kowalski's animation skills (subset)
+```
+
+Then, inside Claude Code, add Anthropic's skill: `/plugin install frontend-design@claude-plugins-official`.
+
+Review what was added (`git status`), read the new `.claude/skills/*`, and commit them together with `skills-lock.json`.
+The README's [Design pack](README.md#design-pack-optional-ts-projects) section explains what each tool does and why some are left out.
+
+**Give the project a `DESIGN.md`.** Once the pack is installed, ask for `/impeccable document`, or copy a reference from
+[awesome-design-md](https://github.com/VoltAgent/awesome-design-md) and adapt it. From then on `/ui`, the frontend rule and
+`ui-checker` all follow it, so the visual language stays the same from session to session without being re-explained.
+
 Useful built-in Claude Code commands that fit this workflow: `/context` (what is using your context), `/usage`
 (token use and cost), `/rewind` (undo to a checkpoint), `/hooks` (inspect hooks).
 
@@ -388,6 +412,7 @@ Then review with `git diff` and commit: `chore: update claude-kit to 1.x.y`. See
 | `check.sh` fails with "command not found" | The command in `commands.env` doesn't match your repo (wrong package manager, no `typecheck` script). Fix it there, or run `/kickoff` step 4 again by asking Claude to verify the check commands. |
 | Tests pass in your terminal but `check.sh` says FAIL | Read `.claude/kit/logs/<target>.log`. `check.sh` runs with `CI=1` and no colour, which some tools treat differently. |
 | `shot.mjs: the project has no playwright package` | Run the one-time setup in [§8.1](#81-frontend-work-ui). |
+| `design-pack.sh` says a download failed | The installer needs internet access to its upstream (GitHub, npm, impeccable.style). Retry, or run that one command by hand. The other packs are unaffected. |
 | `shot.mjs: could not start Chromium` | Run `pnpm exec playwright install chromium`, or point `CHROMIUM_PATH` at an installed Chrome or Chromium. |
 | Session start says the architecture map is stale | Run `/remap`. It updates only the parts that changed. |
 | `bad interpreter` or `$'\r': command not found` (Windows) | The scripts have CRLF line endings. Re-clone the kit with LF endings (see [step 2](#2-get-the-kit)) and re-run the installer. |

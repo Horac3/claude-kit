@@ -213,7 +213,8 @@ gen_settings() {
     local x
     case "$pm" in pnpm) x="pnpm exec" ;; npm) x="npx" ;; yarn) x="yarn" ;; bun) x="bunx" ;; esac
     allow+=("Bash($x tsc --noEmit *)" "Bash($x vitest run *)" "Bash($pm ls *)" "Bash($pm why *)"
-      "Bash(node .claude/kit/shot.mjs *)")
+      "Bash(node .claude/kit/shot.mjs *)" "Bash(npx -y impeccable detect *)" "Bash(npx impeccable detect *)"
+      "Bash(.claude/kit/design-pack.sh)" "Bash(.claude/kit/design-pack.sh --list)")
     ask+=("Bash($pm add *)" "Bash($pm install *)" "Bash($pm remove *)" "Bash($pm update *)"
       "Bash($pm run *)" "Bash($pm dlx *)" "Bash(npx *)" "Bash($x prettier --write *)")
   fi

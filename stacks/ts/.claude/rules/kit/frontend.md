@@ -12,6 +12,8 @@ paths:
 
 # Frontend (claude-kit)
 
+- **`DESIGN.md` at the repo root, if present, is the source of truth** for colour, type, spacing, components, and
+  do's and don'ts. Read it before visual work, and follow it over your own taste. If you change the visual language, update it.
 - **Reuse before you build.** Look for an existing component, token, or utility first (grep `components/`, the
   theme or tokens file, the Tailwind config). Never hard-code a colour, spacing, radius, or font that a token covers.
 - **No new UI dependency** (component kit, icon set, animation library) without asking.
