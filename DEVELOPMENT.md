@@ -12,7 +12,7 @@ claude-kit is a Claude Code setup you install into Go and TypeScript projects, d
 - **Handoff through files:** one roadmap step per conversation, with state in `docs/progress.md`; `/clear` between steps.
 - **Safety enforced by hooks:** deleting or discarding work is blocked deterministically.
 
-It started from the author's own setup on a TypeScript monorepo (`examples/keepsake/` shows that project migrated to the kit).
+It started from the author's own setup on a TypeScript monorepo. `examples/tally/` is a fictional project showing the result of migrating to the kit.
 
 ## Layout
 
@@ -27,8 +27,8 @@ kit/.claude/                 installed into every project (kit-owned, updatable)
 stacks/go/.claude/           go.md rule
 stacks/ts/.claude/           typescript.md, frontend.md rules; /ui skill; ui-checker agent; shot.mjs; design-pack.sh
 scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md
-examples/keepsake/           the author's real project migrated to the kit (see open item 1)
-tests/run.sh                 self-tests (119); KIT_TEST_TS=1 adds a real pnpm + vitest project
+examples/tally/              fictional project showing a migrated CLAUDE.md and path-scoped rules
+tests/run.sh                 self-tests (120); KIT_TEST_TS=1 adds a real pnpm + vitest project
 ```
 
 `install.sh` generates `.claude/settings.json` and `.claude/kit/commands.env` per stack and package manager, in `gen_settings` and `gen_commands`.
@@ -66,34 +66,34 @@ tests/run.sh                 self-tests (119); KIT_TEST_TS=1 adds a real pnpm + 
 | `shot.mjs` turns `isMobile` off | Mobile emulation widens the layout viewport to fit content, which hides horizontal overflow (found in testing). |
 | `impeccable detect` in `ui-checker` | A deterministic scan for generic "AI-made" design patterns that costs no model tokens. Verified on a test page: 7 findings. |
 | Design pack is opt-in | Each model-invocable skill adds its description to every session (core adds 3, all about 8). Taste skills overlap, so keep one main voice. |
-| Bash only (Git Bash or WSL on Windows) | One implementation to test. `.gitattributes` forces LF so scripts survive Windows clones. |
+| Bash only (Git Bash or WSL on Windows) | One implementation to test. `.gitattributes` forces LF so scripts survive Windows clones; `install.sh` appends the same rule to each project, because CRLF hooks fail open under Linux bash. |
 
 ## Verified vs not verified
 
 **Verified:**
-- All 119 self-tests pass, and `shellcheck -S warning` is clean on every script.
+- All 120 self-tests pass on Windows Git Bash (2026-10-19). Under WSL (kali) the 116 that do not need Go or Node pass; the suite assumes `go` and `node` are installed.
+- `shellcheck -S warning` was clean on every script for 1.2.0; not re-run for 1.2.1 (not installed on the Windows machine).
+- Windows: an install committed under `core.autocrlf=true` and re-cloned keeps LF hooks, and the guard blocks under WSL (kali) bash.
 - Headless runs of real Claude Code against an installed project: the guard blocked `rm` and the file survived; agents, rules and the SessionStart hook loaded; `test-runner` ran `check.sh`; `ui-checker` caught every planted defect.
 - `context.sh` against a real repo (go-chi/chi): hotspots, drift of 150 commits, and a dangling path were all detected.
 - A real `npx skills add` install of Vercel's and Emil Kowalski's skills; `claude mcp add ... --scope project` writes `.mcp.json`.
 
 **Not verified:**
 - **Impeccable's installer.** The build sandbox couldn't reach impeccable.style. Its `detect` CLI did work.
-- **Windows (Git Bash or WSL) and macOS's bash 3.2.** `install.sh` uses arrays and `${var//}`, which should be fine, but neither has been run.
+- **macOS's bash 3.2.** `install.sh` uses arrays and `${var//}`, which should be fine, but it hasn't been run. Git for Windows' MSYS bash (as opposed to Cygwin bash) is also untested.
 - **`/kickoff` and `/remap` end to end with a human.** They are interactive, so only their scripts and structure are tested.
 - **The forked skills' `model:` override** (`/decide` on the Plan agent with opus, `/remap` on sonnet). It behaves as the docs describe, but hasn't been observed in a live run.
 
 ## Open items (in priority order)
 
 1. **Public-repo cleanup.**
-   - Replace `examples/keepsake/` with a fictional example project; the current one exposes a real product's retention and compliance details.
-   - Add a LICENSE (MIT suggested).
-   - Replace `<owner>` in `HOW_TO_USE.md` with the real GitHub owner.
-   - The "Migrating … (e.g. Keepsake)" README section should then point at the fictional example.
-2. **Label the opinionated defaults as configurable in the README:**
-   - the nginx-proxy deployment pattern in `docker.md`
-   - `go test -race` in CI only, in `go.md` (the author's machine has no C compiler)
-   - every `rm` blocked
-3. **Test on Windows (Git Bash) and macOS.** If Windows-native users matter, consider `install.ps1`.
+   - Done: `examples/keepsake/` replaced by the fictional `examples/tally/`; MIT `LICENSE` added; README migration section generalised;
+     clone URL in `HOW_TO_USE.md` set to `github.com/Horac3/claude-kit`.
+   - The old Keepsake files are still in git history (commits up to `abc621e`). Before publishing, either push a fresh
+     history (squash into a new root commit) or rewrite it with `git filter-repo --path examples/keepsake --invert-paths`.
+2. ~~Label the opinionated defaults as configurable in the README.~~ Done: README "Opinionated defaults" table
+   (nginx-proxy, `go test -race` in CI only, every `rm` blocked).
+3. **Test on macOS** (bash 3.2). Windows Git Bash and WSL were tested in 1.2.1. If Windows-native users matter, consider `install.ps1`.
 4. **Add CI** for the kit itself: a GitHub Actions job running `tests/run.sh` and shellcheck on Ubuntu and macOS.
 5. **Verify Impeccable's installer** on a networked machine, and note any hook it adds to settings.
 6. **Maybe:** a `--stack` value for other languages (Python, Kotlin) with their own rule files and `commands.env` defaults.

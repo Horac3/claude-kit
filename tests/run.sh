@@ -59,6 +59,7 @@ if command -v jq >/dev/null; then
   jq -e '.permissions.allow | index("Bash(go test *)")' "$P/.claude/settings.json" >/dev/null && ok "go permissions present" || ko "go permissions present"
 fi
 grep -qxF '.claude/kit/logs/' .gitignore && ok ".gitignore updated" || ko ".gitignore updated"
+grep -qxF '.claude/**/*.sh text eol=lf' .gitattributes && ok "kit scripts forced to LF (.gitattributes)" || ko "kit scripts forced to LF"
 
 echo "== check runner"
 out="$(.claude/kit/check.sh all 2>&1)"; rc=$?
@@ -122,7 +123,10 @@ expect_exit 0 "allows Edit of commands.env"    gf Edit "$P/.claude/kit/commands.
 
 echo "== guard fallbacks without jq"
 nojq="$WORK/nojq"; mkdir -p "$nojq"
-for b in bash cat sed awk grep tr head git python3 dirname wc; do ln -sf "$(command -v $b)" "$nojq/$b"; done
+# Wrapper scripts rather than symlinks: Git Bash on Windows cannot create symlinks without Developer Mode.
+for b in bash cat sed awk grep tr head git python3 dirname wc; do
+  printf '#!/bin/sh\nexec "%s" "$@"\n' "$(command -v $b)" >"$nojq/$b"; chmod +x "$nojq/$b"
+done
 out="$(printf '{"tool_name":"Bash","tool_input":{"command":"rm -rf x"}}' | PATH="$nojq" CLAUDE_PROJECT_DIR="$P" bash "$P/.claude/hooks/guard-bash.sh" 2>&1)"; rc=$?
 [ $rc -eq 2 ] && ok "guard works with python3 only" || ko "guard works with python3 only" "$out"
 rm -f "$nojq/python3"
@@ -184,13 +188,17 @@ out="$("$K2/install.sh" --update "$P" 2>&1)"
 contains "$out" "obsolete .claude/agents/debugger.md" "obsolete file reported"
 out="$("$K2/install.sh" --update --dry-run "$P" 2>&1)"
 contains "$out" "dry run" "dry run supported"
+[ "$(grep -cxF '.claude/**/*.sh text eol=lf' "$P/.gitattributes")" = 1 ] && ok ".gitattributes not duplicated on update" || ko ".gitattributes not duplicated"
 
 echo "== installer: pre-existing CLAUDE.md is kept"
 Q="$WORK/existing"; mkdir -p "$Q"; cd "$Q" || exit 1; git init -q
 echo '{"name":"x","scripts":{"test":"vitest run"}}' >package.json
 echo "# My rules" >CLAUDE.md
+printf '*.png binary' >.gitattributes   # no trailing newline
 "$KIT/install.sh" "$Q" >/dev/null 2>&1
 [ "$(cat CLAUDE.md)" = "# My rules" ] && ok "existing CLAUDE.md untouched" || ko "existing CLAUDE.md untouched"
+grep -qxF '*.png binary' .gitattributes && grep -qxF '.claude/**/*.sh text eol=lf' .gitattributes &&
+  ok "existing .gitattributes appended to, not merged" || ko "existing .gitattributes appended" "$(cat .gitattributes)"
 [ -f CLAUDE.md.kit-new ] && ok "template offered alongside" || ko "template offered alongside"
 [ -f .claude/rules/kit/typescript.md ] && ok "ts stack detected" || ko "ts stack detected"
 grep -q "pnpm run --if-present test" .claude/kit/commands.env && ok "uses existing test script" || ko "uses existing test script" "$(cat .claude/kit/commands.env)"

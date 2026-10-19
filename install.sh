@@ -296,13 +296,25 @@ if [ -f "$manifest" ]; then
   done <"$manifest"
 fi
 
-# .gitignore: append-only
-gi="$target/.gitignore"
-for line in ".claude/settings.local.json" ".claude/kit/logs/" "CLAUDE.local.md" "*.kit-new"; do
-  if ! { [ -f "$gi" ] && grep -qxF "$line" "$gi"; }; then
-    [ "$dry" -eq 1 ] || printf '%s\n' "$line" >>"$gi"
-    note "  ignore   $line  (.gitignore)"
+append_line() { # append_line <file> <line>: append-only, skips lines already present
+  local f="$1" line="$2"
+  [ -f "$f" ] && grep -qxF "$line" "$f" && return 1
+  if [ "$dry" -eq 0 ]; then
+    [ -s "$f" ] && [ -n "$(tail -c1 "$f")" ] && printf '\n' >>"$f"   # file lacks a final newline
+    printf '%s\n' "$line" >>"$f"
   fi
+  return 0
+}
+
+# .gitignore: append-only
+for line in ".claude/settings.local.json" ".claude/kit/logs/" "CLAUDE.local.md" "*.kit-new"; do
+  append_line "$target/.gitignore" "$line" && note "  ignore   $line  (.gitignore)"
+done
+
+# .gitattributes: append-only. Hooks checked out with CRLF (core.autocrlf on Windows) crash under
+# Linux/WSL bash and exit 0, which silently disables the guards.
+for line in ".claude/**/*.sh text eol=lf" ".claude/kit/commands.env text eol=lf"; do
+  append_line "$target/.gitattributes" "$line" && note "  eol=lf   ${line%% *}  (.gitattributes)"
 done
 
 # manifest (the kit's own bookkeeping file)

@@ -100,18 +100,20 @@ docs/requirements.md               project  — FR-AREA-NN template
 .claude/rules/kit/working-rules.md   always     safety, working loop, test rules
 .claude/rules/kit/model-routing.md   always     the table above + token rules
 .claude/rules/kit/hexagonal.md       on demand  **/domain/**, **/ports/**, **/adapters/**, **/core/**
-.claude/rules/kit/docker.md          on demand  Dockerfiles, compose files (nginx-proxy pattern)
+.claude/rules/kit/docker.md          on demand  Dockerfiles, compose files (nginx-proxy pattern; see Opinionated defaults)
 .claude/rules/kit/go.md              on demand  **/*.go            (go and both stacks)
 .claude/rules/kit/typescript.md      on demand  **/*.ts(x), package.json, tsconfig   (ts and both stacks)
 .claude/rules/kit/frontend.md        on demand  **/*.{tsx,jsx,vue,svelte,css,scss,html}  (ts and both stacks)
 ```
 
-The installer also adds `.claude/settings.local.json`, `.claude/kit/logs/`, `CLAUDE.local.md` and `*.kit-new` to `.gitignore`.
-It only appends to that file.
+The installer also adds `.claude/settings.local.json`, `.claude/kit/logs/`, `CLAUDE.local.md` and `*.kit-new` to `.gitignore`,
+and `eol=lf` rules for `.claude/**/*.sh` and `commands.env` to `.gitattributes`. Without the second, a Windows checkout with
+`core.autocrlf` gives the hooks CRLF line endings, and Linux/WSL bash then fails on them and exits 0, which silently disables the guards.
+It only appends to those files.
 
 **Kit files** belong to the kit. **Project files** are yours from the moment they are created.
 Your own rules go in `.claude/rules/<topic>.md`, outside `kit/`, and the kit never touches them.
-Give them `paths:` frontmatter so they load only when relevant (see `examples/keepsake/.claude/rules/`).
+Give them `paths:` frontmatter so they load only when relevant (see `examples/tally/.claude/rules/`).
 
 ## Design pack (optional, TS projects)
 
@@ -166,6 +168,19 @@ cd ~/claude-kit && git pull
 The guards are there to prevent accidents; they are not a sandbox against a determined adversary. When you genuinely need a
 destructive command, run it yourself: type `!` before it in Claude Code, or use a terminal.
 
+## Opinionated defaults (all configurable)
+
+A few defaults come from the author's own setup. Change them if they don't fit your project:
+
+| Default | Where | How to change |
+|---|---|---|
+| Production containers join an external `nginx-proxy` network with `VIRTUAL_HOST` / `LETSENCRYPT_*` and `expose`, never `ports` | `.claude/rules/kit/docker.md` | Edit or replace that bullet with your own deployment pattern (Traefik, Kubernetes, a PaaS). |
+| `go test -race` (and other cgo/native builds) run only in CI or Docker, because the author's machine has no C compiler | `.claude/rules/kit/go.md`, `.claude/rules/kit/docker.md` | If you have a C compiler, delete those lines and add `-race` to `CHECK_TEST` in `.claude/kit/commands.env`. |
+| Every `rm` (and `rmdir`, `unlink`, `shred`) is blocked, even on build output | `.claude/hooks/guard-bash.sh` (first `check` line) and the `Bash(rm *)` entries in `.claude/settings.json` `permissions.deny` | Edit both yourself; Claude is blocked from editing hooks and settings. Or keep the block and run deletes with `!`. |
+
+Editing a kit file is safe: `--update` sees that it is modified, leaves your version in place and writes the new kit version
+next to it as `<file>.kit-new`.
+
 ## Requirements
 
 - bash and git. macOS, Linux, or Windows through Git Bash or WSL.
@@ -192,14 +207,14 @@ destructive command, run it yourself: type `!` before it in Claude Code, or use 
 Afterwards, `/remap` keeps the map current from `git diff` since the `mapped-at` commit. It also reports paths named in
 `CLAUDE.md` or the map that no longer exist.
 
-### Migrating from your own Claude Code setup (e.g. Keepsake)
+### Migrating from your own Claude Code setup
 
-1. `~/claude-kit/install.sh ~/code/keepsake`. Your `CLAUDE.md`, `.claude/settings.json` and `docs/progress.md` are kept,
+1. `~/claude-kit/install.sh ~/code/my-project`. Your `CLAUDE.md`, `.claude/settings.json` and `docs/progress.md` are kept,
    and the kit's versions arrive as `*.kit-new` for reference.
 2. Your old `.claude/skills/{next,tdd}` and `agents/{test-runner,reviewer}` have the same names as the kit's, so the kit's
    versions arrive as `.kit-new` and you choose which to keep. The kit's versions are generalised and add `check.sh`, `/handoff`, and injection.
-3. Run `/kickoff` to slim `CLAUDE.md` (step 4 above). `examples/keepsake/` shows the result: generic sections removed (they now live in `rules/kit/`),
-   retention and payments moved to path-scoped rules. The always-loaded context shrinks by about 20% even with the added rules.
+3. Run `/kickoff` to slim `CLAUDE.md` (step 4 above). `examples/tally/` (a fictional project) shows the result: generic sections removed (they now live in `rules/kit/`),
+   invoice and payment rules moved to path-scoped rules, so they load only when those files are touched.
 4. Merge hooks and the status line from `.claude/settings.json.kit-new` into your `settings.json`.
 5. Set `.claude/kit/commands.env` to `pnpm -r --if-present run typecheck|lint|test`.
 

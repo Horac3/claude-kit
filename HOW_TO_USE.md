@@ -43,7 +43,7 @@ The kit works with **Go**, **TypeScript/JavaScript** (pnpm, npm, yarn, or bun), 
 Clone it once, somewhere outside your projects. It's a tool you install *from*, not a dependency.
 
 ```bash
-git clone https://github.com/<owner>/claude-kit.git ~/claude-kit
+git clone https://github.com/Horac3/claude-kit.git ~/claude-kit
 ```
 
 > **Windows:** clone with LF line endings so the scripts run in Git Bash. The repo's `.gitattributes`
@@ -75,6 +75,7 @@ claude-kit 1.0.0 → /home/you/code/my-project  (mode: install, stack: go)
   add      .claude/settings.json
   add      .claude/kit/commands.env
   ignore   .claude/kit/logs/  (.gitignore)
+  eol=lf   .claude/**/*.sh  (.gitattributes)
 done: 29 added, 0 updated, 0 unchanged, 0 project files kept, 0 to merge
 ```
 
@@ -111,7 +112,7 @@ Check that everything loaded:
 The kit is meant to be committed, so everyone on the project (and every machine you use) gets the same setup:
 
 ```bash
-git add CLAUDE.md docs/ .claude/ .gitignore
+git add CLAUDE.md docs/ .claude/ .gitignore .gitattributes
 git commit -m "chore: add claude-kit"
 ```
 
@@ -380,7 +381,7 @@ paths:
 - Payment state is confirmed by provider callback plus reconciliation, never by the frontend.
 ```
 
-More examples: [`examples/keepsake/`](examples/keepsake/).
+More examples: [`examples/tally/`](examples/tally/) (a fictional project).
 
 ## 12. Update the kit
 

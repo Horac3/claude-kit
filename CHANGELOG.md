@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1 — 2026-10-19
+- `install.sh` appends `eol=lf` rules for `.claude/**/*.sh` and `.claude/kit/commands.env` to the project's `.gitattributes`
+  (append-only). Hooks checked out with CRLF crash under Linux/WSL bash and exit 0, which silently disabled the guards.
+  Existing projects get the rules on `--update`. A checkout that already has CRLF scripts keeps them until they are checked
+  out again: commit `.gitattributes`, delete `.claude/hooks/*.sh` and `.claude/kit/*.sh`, then `git checkout -- .claude`.
+- Self-tests run on Windows Git Bash: the no-jq fallback tests use wrapper scripts instead of symlinks.
+
 ## 1.2.0 — 2026-10-19
 - `design-pack.sh` (ts/both stacks): opt-in installer for curated third-party design skills from their upstreams:
   core (Impeccable, Vercel web-design-guidelines, Anthropic frontend-design plugin), motion (Emil Kowalski subset),
