@@ -77,8 +77,13 @@ Leave those files in place; tell the user they can remove them later. Do not edi
 
 ## E. Decisions
 
-If ADRs exist, append index entries to `docs/decisions.md`, linking instead of copying:
-`## D-0NN: <title>` · `Status: accepted (imported)` · `See: <path>`. Add one entry for each
+First detect the entry style `docs/decisions.md` already uses (`grep -n '^## ' docs/decisions.md`). If it is
+not the kit's `## D-NNN: <title>`, e.g. `## <Topic> (step N)`, keep that style and record it in a project rule
+so `/decide` follows it: `.claude/rules/decisions.md` with `paths: ["docs/decisions.md"]` and one line, such as
+`Entries use "## <Topic> (step N)", not D-NNN.`
+
+If ADRs exist, append index entries to `docs/decisions.md` in that style, linking instead of copying
+(kit style: `## D-0NN: <title>` · `Status: accepted (imported)` · `See: <path>`). Add one entry for each
 contradiction the user confirmed as intended.
 
 ## F. Requirements and roadmap (continue at step 4 of SKILL.md for commands first)
@@ -91,5 +96,18 @@ An existing project rarely has `FR-` requirements. Do not reverse-engineer the w
   behaviour first, so refactors are safe. It is TDD's safety net for legacy code.
 - If `docs/progress.md` existed before the kit, keep its content and add any missing headings
   (`## Roadmap`, `## Current step`, `## Handoff notes`, `## Log`) with Edit.
+- **Oversized handoffs.** Measure the section:
+  `awk '/^## Handoff notes/{f=1;next} /^## /{f=0} f' docs/progress.md | wc -l`. Over ~60 lines, every session
+  pays for it. Propose keeping the newest handoff and moving the older ones **verbatim** to
+  `docs/progress-archive.md`. Move them **by script, never by retyping**. Show the line range (`grep -n` the
+  boundaries), and after approval run, with `A`-`B` the inclusive line range to move:
+  ```bash
+  f=docs/progress.md a=docs/progress-archive.md A=<first> B=<last>
+  [ -f "$a" ] || printf '# Progress archive\n\nOlder handoff notes, moved verbatim from docs/progress.md.\n\n' >"$a"
+  before=$(wc -l <"$f"); sed -n "${A},${B}p" "$f" >>"$a"
+  rest="$(awk -v a="$A" -v b="$B" 'NR<a || NR>b' "$f")"; printf '%s\n' "$rest" >"$f"
+  echo "moved $((before - $(wc -l <"$f"))) of $((B - A + 1)) lines"
+  ```
+  Add a one-line pointer to the archive under "Handoff notes", and add `## Log` if it is missing.
 
 Then return to SKILL.md step 5 (approval) and step 6 (finish).

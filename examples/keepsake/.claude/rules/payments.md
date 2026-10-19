@@ -3,6 +3,7 @@ paths:
   - "**/payment*/**"
   - "**/*payment*"
   - "**/billing/**"
+  - "**/checkout/**"
   - "**/orders/**"
 ---
 

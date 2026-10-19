@@ -83,6 +83,7 @@ Options:
 | Flag | Use it when |
 |---|---|
 | `--stack go\|ts\|both` | Auto-detection is wrong, or the repo is empty (no `go.mod` or `package.json` yet). |
+| `--frontend` | A non-TypeScript project renders UI (e.g. a Go service with HTML templates) and you want `/ui`, `ui-checker` and the frontend rule. `--update` keeps it. |
 | `--dry-run` | You want to see the plan without writing anything. |
 | `--update` | The kit is already installed and you want a newer version (see [step 12](#12-update-the-kit)). |
 
@@ -264,7 +265,8 @@ Use these on their own, outside the `/next` loop:
 ### 8.1 Frontend work: `/ui`
 
 In TypeScript projects the kit adds frontend rules (accessibility, the four data states, design tokens, mobile-first),
-a `/ui` command, and a `ui-checker` subagent that actually **looks** at the page.
+a `/ui` command, and a `ui-checker` subagent that actually **looks** at the page. Other stacks get the same layer
+with `install.sh --frontend`. A Go project then needs a small `package.json` (`npm init -y`) to hold Playwright.
 
 One-time setup in the project (the subagent needs a browser):
 
@@ -380,7 +382,41 @@ paths:
 - Payment state is confirmed by provider callback plus reconciliation, never by the frontend.
 ```
 
-More examples: [`examples/keepsake/`](examples/keepsake/).
+More examples: [`examples/keepsake/`](examples/keepsake/). Glob a rule's folders as well as file names: `**/*purge*`
+does not match files inside a `purge/` folder, so add `**/purge/**`.
+
+**Integration tests that need services.** If some packages need Postgres, Redis or S3 to test, don't let
+`CHECK_TEST` silently skip them. Put a helper in a project-owned folder, for example `.claude/project/test.sh`.
+It always runs the unit tests and runs the integration packages only when their services answer. Otherwise it fails
+with a line saying what was **not** tested, so a partial run is never green:
+
+```bash
+#!/usr/bin/env bash
+# .claude/project/test.sh: unit tests always; integration tests only when their services answer.
+set -u
+SERVICES="postgres:localhost:5432 redis:localhost:6379 s3:localhost:9000"   # name:host:port
+INTEGRATION_PACKAGES="@acme/db @acme/storage"                              # pnpm package names
+
+filters=""; for p in $INTEGRATION_PACKAGES; do filters="$filters --filter !$p"; done
+# shellcheck disable=SC2086
+pnpm -r $filters --if-present run test "$@" || exit 1
+
+down=""
+for s in $SERVICES; do
+  name="${s%%:*}" rest="${s#*:}"
+  (exec 3<>"/dev/tcp/${rest%%:*}/${rest#*:}") 2>/dev/null || down="$down $name"
+done
+if [ -n "$down" ]; then
+  echo "Error: integration packages NOT tested ($INTEGRATION_PACKAGES): not reachable:$down." >&2
+  echo "Start them (e.g. docker compose up -d) and re-run." >&2
+  exit 1
+fi
+filters=""; for p in $INTEGRATION_PACKAGES; do filters="$filters --filter $p"; done
+# shellcheck disable=SC2086
+pnpm -r $filters --if-present run test "$@"
+```
+
+Then point the kit at it in `commands.env`: `CHECK_TEST='bash .claude/project/test.sh'`. The kit never touches `.claude/project/`.
 
 ## 12. Update the kit
 

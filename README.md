@@ -96,14 +96,14 @@ docs/requirements.md               project  — FR-AREA-NN template
 .claude/skills/{kickoff,next,tdd,fix,handoff,review,decide,commit,remap}/SKILL.md   kit
 .claude/skills/kickoff/existing.md                                                  kit  — loaded only for existing codebases
 .claude/agents/{test-runner,reviewer,researcher,debugger}.md                        kit
-.claude/skills/ui/SKILL.md · agents/ui-checker.md · kit/shot.mjs · kit/design-pack.sh   kit  — ts and both stacks
+.claude/skills/ui/SKILL.md · agents/ui-checker.md · kit/shot.mjs · kit/design-pack.sh   kit  — ts and both stacks, or any stack with --frontend
 .claude/rules/kit/working-rules.md   always     safety, working loop, test rules
 .claude/rules/kit/model-routing.md   always     the table above + token rules
 .claude/rules/kit/hexagonal.md       on demand  **/domain/**, **/ports/**, **/adapters/**, **/core/**
 .claude/rules/kit/docker.md          on demand  Dockerfiles, compose files (nginx-proxy pattern)
 .claude/rules/kit/go.md              on demand  **/*.go            (go and both stacks)
 .claude/rules/kit/typescript.md      on demand  **/*.ts(x), package.json, tsconfig   (ts and both stacks)
-.claude/rules/kit/frontend.md        on demand  **/*.{tsx,jsx,vue,svelte,css,scss,html}  (ts and both stacks)
+.claude/rules/kit/frontend.md        on demand  **/*.{tsx,jsx,vue,svelte,css,scss,html,tmpl,gohtml,templ}  (ts and both stacks, or --frontend)
 ```
 
 The installer also adds `.claude/settings.local.json`, `.claude/kit/logs/`, `CLAUDE.local.md` and `*.kit-new` to `.gitignore`.
@@ -112,6 +112,7 @@ It only appends to that file.
 **Kit files** belong to the kit. **Project files** are yours from the moment they are created.
 Your own rules go in `.claude/rules/<topic>.md`, outside `kit/`, and the kit never touches them.
 Give them `paths:` frontmatter so they load only when relevant (see `examples/keepsake/.claude/rules/`).
+Glob a rule's folders, not only its file names: `**/*purge*` matches `purge.ts` but not `purge/run.ts`, so add `**/purge/**`.
 
 ## Design pack (optional, TS projects)
 
@@ -185,7 +186,8 @@ destructive command, run it yourself: type `!` before it in Claude Code, or use 
 3. **Asks only about gaps and contradictions,** plus what you want to work on next.
 4. **Slims a pre-existing `CLAUDE.md` instead of replacing it.** It first backs it up to `docs/CLAUDE.md.pre-kit`.
    Then it shows a table of every original section and where it went: dropped as a duplicate of a kit rule, moved to a path-scoped rule, moved to a reference doc, or kept. No rule disappears without a row in that table.
-5. **Links existing ADRs** from `docs/decisions.md` instead of copying them.
+5. **Links existing ADRs** from `docs/decisions.md` instead of copying them, in the entry style the log already uses.
+   If the handoff notes in `docs/progress.md` have grown past ~60 lines, it offers to move older ones verbatim to `docs/progress-archive.md`.
 6. **Builds the roadmap from work already in flight** (branches, commit themes, TODOs, issues) and writes requirements only for the work you pick.
    Before changing a hotspot that has thin tests, it proposes a characterisation-test step first.
 
@@ -201,7 +203,8 @@ Afterwards, `/remap` keeps the map current from `git diff` since the `mapped-at`
 3. Run `/kickoff` to slim `CLAUDE.md` (step 4 above). `examples/keepsake/` shows the result: generic sections removed (they now live in `rules/kit/`),
    retention and payments moved to path-scoped rules. The always-loaded context shrinks by about 20% even with the added rules.
 4. Merge hooks and the status line from `.claude/settings.json.kit-new` into your `settings.json`.
-5. Set `.claude/kit/commands.env` to `pnpm -r --if-present run typecheck|lint|test`.
+5. Check `.claude/kit/commands.env`. In a workspace the installer runs a root script when the root `package.json` has one
+   (`pnpm run lint`), since `pnpm -r` skips the root. It falls back to `pnpm -r --if-present run <x>` only for scripts that live in packages.
 
 ## Developing the kit
 

@@ -1,10 +1,9 @@
 ---
 paths:
-  - "packages/domain/**/retention/**"
-  - "packages/domain/**/*retention*"
-  - "packages/domain/**/*purge*"
-  - "apps/**/*purge*"
-  - "apps/**/*retention*"
+  - "**/retention/**"
+  - "**/purge/**"
+  - "**/*retention*"
+  - "**/*purge*"
   - "packages/database/**"
 ---
 
