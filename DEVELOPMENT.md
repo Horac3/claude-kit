@@ -28,7 +28,7 @@ stacks/go/.claude/           go.md rule
 stacks/ts/.claude/           typescript.md, frontend.md rules; /ui skill; ui-checker agent; shot.mjs; design-pack.sh
 scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md
 examples/tally/              fictional project showing a migrated CLAUDE.md and path-scoped rules
-tests/run.sh                 self-tests (148); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
+tests/run.sh                 self-tests (167); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
 .github/workflows/ci.yml     shellcheck; tests on Ubuntu (+ TS) and macOS bash 3.2
 ```
 
@@ -80,6 +80,12 @@ tests/run.sh                 self-tests (148); KIT_TEST_TS=1 adds a real pnpm + 
 - `shellcheck -S warning` (0.11.0) is clean on every script for 1.3.0.
 - Real `design-pack.sh core motion --apply` (network, 2026-10-19): 6 skills and 4 agents installed, each with a correct licence entry.
 - Windows: an install committed under `core.autocrlf=true` and re-cloned keeps LF hooks, and the guard blocks under WSL (kali) bash.
+- 1.4.0: all 167 self-tests pass on Windows Git Bash, and shellcheck is clean.
+- **Verified on a real monorepo (1.4.0):** installing 1.2.0 into keeper (pnpm, 13 packages, lint only at the root,
+  integration tests needing Postgres, Redis and S3) exposed the false-green lint, the root `vitest` in `CHECK_TEST_ONE`,
+  and PASS when nothing ran (task 02). The fixes were checked against real pnpm on a workspace. `pnpm -r --if-present run lint` with
+  no package script prints only `Scope: N of M workspace projects` and exits 0, so `check.sh` ignores that line.
+  pnpm forwards `-t <pattern>` to each package's script.
 - Headless runs of real Claude Code against an installed project: the guard blocked `rm` and the file survived; agents, rules and the SessionStart hook loaded; `test-runner` ran `check.sh`; `ui-checker` caught every planted defect.
 - `context.sh` against a real repo (go-chi/chi): hotspots, drift of 150 commits, and a dangling path were all detected.
 - A real `npx skills add` install of Vercel's and Emil Kowalski's skills; `claude mcp add ... --scope project` writes `.mcp.json`.
@@ -91,6 +97,17 @@ tests/run.sh                 self-tests (148); KIT_TEST_TS=1 adds a real pnpm + 
 - **The forked skills' `model:` override** (`/decide` on the Plan agent with opus, `/remap` on sonnet). It behaves as the docs describe, but hasn't been observed in a live run.
 
 ## Open items (in priority order)
+
+0. **Done: monorepo fixes** (`tasks/02-monorepo-fixes.md`, 1.4.0):
+   - [x] 1 root-first workspace scripts, empty when no package has the script
+   - [x] 2 workspace `CHECK_TEST_ONE` via package scripts
+   - [x] 3 `check.sh` SKIP when nothing ran
+   - [x] 4 integration-test split pattern (HOW_TO_USE §11)
+   - [x] 5 `/decide` follows the existing decision-log style
+   - [x] 6 handoff archive in existing-project `/kickoff`
+   - [x] 7 folder globs in example rules, plus a README note
+   - [x] 8 `--frontend`
+   - [ ] CI green on Ubuntu and macOS bash 3.2: confirm on the first push of 1.4.0
 
 1. **Public-repo cleanup.**
    - Done: `examples/keepsake/` replaced by the fictional `examples/tally/`; MIT `LICENSE` added; README migration section generalised;

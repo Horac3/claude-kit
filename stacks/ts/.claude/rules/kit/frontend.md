@@ -7,6 +7,9 @@ paths:
   - "**/*.css"
   - "**/*.scss"
   - "**/*.html"
+  - "**/*.tmpl"
+  - "**/*.gohtml"
+  - "**/*.templ"
   - "**/tailwind.config.*"
 ---
 

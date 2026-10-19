@@ -1,9 +1,8 @@
 ---
 paths:
-  - "packages/domain/**/invoice*/**"
-  - "packages/domain/**/*invoice*"
+  - "**/invoice*/**"
+  - "**/*invoice*"
   - "packages/pdf/**"
-  - "apps/**/*invoice*"
 ---
 
 # Invoices (test this first)

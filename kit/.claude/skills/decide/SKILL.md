@@ -15,7 +15,11 @@ Decide: $ARGUMENTS
 Ground the decision in this repository. Read `CLAUDE.md`, the relevant parts of `docs/decisions.md`
 (do not contradict an earlier decision without saying so), and only the code the decision touches.
 
-Return a decision record in this exact shape, under ~400 words:
+**Match the log's existing entry style.** If `docs/decisions.md` (or a project rule about it) uses another
+heading style, e.g. `## <Topic> (step N)`, use that heading and numbering instead of `D-NNN`, and keep the body
+fields below. Never mix two styles in one log.
+
+Return a decision record in this shape, under ~400 words:
 
 ```
 ## D-<next number>: <title>

@@ -43,6 +43,17 @@ collapse() {
     END { if (c > 0) print "  … (+" c " similar lines)" }'
 }
 
+# A zero exit that ran nothing must not read as PASS: the workspace runner matched no package, or no package
+# has the script. pnpm/npm/bun script runners always print what they run, so one that prints nothing (or only
+# pnpm's "Scope: …" line) ran nothing. Silence alone is not enough: go vet and gofmt -l are silent on success.
+NOTHING_RE='No projects matched|None of the selected packages has a|No packages matched'
+RUNNER_RE='(^|[^[:alnum:]_-])(pnpm|npm|bun)[[:space:]]([^;&|]*[[:space:]])?run([[:space:]]|$)'
+nothing_ran() { # nothing_ran <command> <log>
+  grep -qE "$NOTHING_RE" "$2" && return 0
+  printf '%s' "$1" | grep -qE "$RUNNER_RE" || return 1
+  ! grep -vE '^Scope: [0-9]+ of [0-9]+ workspace projects' "$2" | grep -q '[^[:space:]]'
+}
+
 summary_line() { # best-effort count line from a passing run
   grep -E '(Tests? +[0-9]+ passed|Test Files +[0-9]+ passed|^ok  |passed|PASS)' "$1" 2>/dev/null |
     grep -vE '^ok  ' | tail -n 1
@@ -64,6 +75,10 @@ run_target() { # run_target <name> <command> [args...]
   end=$(date +%s)
   lines=$(wc -l <"$log" | tr -d ' ')
   if [ "$status" -eq 0 ]; then
+    if nothing_ran "$cmd" "$log"; then
+      echo "SKIP $name (nothing ran)"
+      return 0
+    fi
     local s; s="$(summary_line "$log" | tr '\n' ' ' | sed 's/  */ /g')"
     echo "PASS $name ($((end - start))s)${s:+ — $s}"
     return 0

@@ -22,7 +22,8 @@ immutable once issued.
 
 ## Commands
 Checks: `.claude/kit/check.sh all|typecheck|lint|test|test-one "<name>"` via the `test-runner` subagent.
-Configured in `.claude/kit/commands.env` (`pnpm -r --if-present run …`).
+Configured in `.claude/kit/commands.env`: root scripts run at the root (`pnpm run lint`); scripts that exist only
+in packages run with `pnpm -r --if-present run …`.
 
 ## Architecture rules (non-negotiable)
 1. Ports and adapters for storage, payments, email, and PDF rendering.

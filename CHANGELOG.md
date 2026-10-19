@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.4.0 — 2026-10-19
+Fixes found by installing 1.2.0 into a real pnpm monorepo (13 packages, lint at the root only).
+- **Workspaces no longer report a false green.** For each target, `commands.env` uses the root script when the root
+  `package.json` has one (`pnpm run lint`; `pnpm -r` skips the root). It falls back to a recursive run only for
+  scripts that live in packages, and stays empty (SKIP) when no package has the script. Applies to pnpm, npm, yarn and bun.
+  Only new installs get this. To pick it up, compare `commands.env` with `commands.env.kit-new` after `--update`.
+- Workspace `CHECK_TEST_ONE` passes `-t "$1"` to each package's test script instead of calling a root `vitest`
+  that usually isn't installed there.
+- `check.sh` reports `SKIP <target> (nothing ran)` instead of PASS when a command exits 0 but ran nothing
+  ("No projects matched", "None of the selected packages has a … script", or a script runner that printed only its scope).
+- `--frontend`: adds the frontend layer (`frontend.md`, `/ui`, `ui-checker`, `shot.mjs`, `design-pack.sh`) to any stack,
+  e.g. a Go service rendering HTML templates. Recorded in the manifest, so `--update` keeps it. `frontend.md` now also
+  matches `*.tmpl`, `*.gohtml` and `*.templ`.
+- `/decide` follows the entry style `docs/decisions.md` already uses. Existing-project `/kickoff` records that style in a
+  project rule and offers to archive oversized handoff notes verbatim to `docs/progress-archive.md`.
+- Docs: integration-test split pattern (`.claude/project/test.sh`) in HOW_TO_USE §11; glob a rule's folders, not only
+  file names (example rules fixed).
+
 ## 1.3.0 — 2026-10-19
 - `design-pack.sh --apply` writes licence notices for what the upstream installers copy. Each new skill folder gets its
   upstream `LICENSE` (and `NOTICE` for Apache-2.0), and new agent files point to a licence copy. Existing files are never
