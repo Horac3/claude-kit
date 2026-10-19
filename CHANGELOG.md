@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 — 2026-10-19
+- `design-pack.sh --apply` writes licence notices for what the upstream installers copy. Each new skill folder gets its
+  upstream `LICENSE` (and `NOTICE` for Apache-2.0), and new agent files point to a licence copy. Existing files are never
+  overwritten. `THIRD_PARTY_NOTICES.md` lists every item with its upstream URL, SPDX id and copyright line, plus the
+  runtime-only MCP servers and a never-commit note for Anthropic's proprietary `frontend-design` plugin. The kit edits
+  only its marked block, and re-runs update entries in place.
+- When an upstream has no LICENSE file (currently `vercel-labs/agent-skills`), the licence its README declares is
+  recorded and no LICENSE is written. A licence that can't be fetched is marked "add manually" and the run exits non-zero.
+- The dry run mentions the notices; the closing message says to commit them with the skills and `skills-lock.json`.
+- The pack refuses to run when `THIRD_PARTY_NOTICES.md` has uncommitted changes.
+- Docs: `CREDITS.md`, licence guidance in the README and HOW_TO_USE §8.2, and a troubleshooting row. Impeccable's
+  installer is verified: its hooks go to `.claude/settings.local.json`, not `settings.json`.
+
 ## 1.2.1 — 2026-10-19
 - `install.sh` appends `eol=lf` rules for `.claude/**/*.sh` and `.claude/kit/commands.env` to the project's `.gitattributes`
   (append-only). Hooks checked out with CRLF crash under Linux/WSL bash and exit 0, which silently disabled the guards.
