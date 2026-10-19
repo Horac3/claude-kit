@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck --version
+      - run: shellcheck -S warning -x install.sh tests/run.sh kit/.claude/hooks/*.sh kit/.claude/kit/*.sh stacks/ts/.claude/kit/*.sh
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu: full suite, including the real pnpm + vitest project.
+          - os: ubuntu-latest
+            bash: bash
+            ts: "1"
+          # macOS: the system bash 3.2, which the kit has to support. /bin goes first on PATH
+          # so hooks and scripts started with plain "bash" also get 3.2, not Homebrew's bash.
+          - os: macos-latest
+            bash: /bin/bash
+            ts: "0"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: matrix.ts == '1'
+        run: npm install -g pnpm@9
+      - name: tests/run.sh
+        env:
+          KIT_TEST_TS: ${{ matrix.ts }}
+        run: |
+          if [ "${{ matrix.os }}" = macos-latest ]; then export PATH="/bin:$PATH"; fi
+          bash --version | head -1
+          git config --global init.defaultBranch main
+          ${{ matrix.bash }} tests/run.sh

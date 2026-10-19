@@ -6,6 +6,10 @@
   Existing projects get the rules on `--update`. A checkout that already has CRLF scripts keeps them until they are checked
   out again: commit `.gitattributes`, delete `.claude/hooks/*.sh` and `.claude/kit/*.sh`, then `git checkout -- .claude`.
 - Self-tests run on Windows Git Bash: the no-jq fallback tests use wrapper scripts instead of symlinks.
+- `design-pack.sh`: no longer aborts on macOS bash 3.2 when a pack has nothing to run (e.g. `shadcn` without
+  `components.json`); empty arrays under `set -u` are expanded safely.
+- CI for the kit: shellcheck, and `tests/run.sh` on Ubuntu (with the pnpm + vitest test) and on macOS's bash 3.2.
+  `KIT_TEST_TS=1` without pnpm now fails instead of silently skipping.
 
 ## 1.2.0 — 2026-10-19
 - `design-pack.sh` (ts/both stacks): opt-in installer for curated third-party design skills from their upstreams:

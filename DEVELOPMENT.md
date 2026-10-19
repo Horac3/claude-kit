@@ -28,7 +28,8 @@ stacks/go/.claude/           go.md rule
 stacks/ts/.claude/           typescript.md, frontend.md rules; /ui skill; ui-checker agent; shot.mjs; design-pack.sh
 scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md
 examples/tally/              fictional project showing a migrated CLAUDE.md and path-scoped rules
-tests/run.sh                 self-tests (120); KIT_TEST_TS=1 adds a real pnpm + vitest project
+tests/run.sh                 self-tests (121); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
+.github/workflows/ci.yml     shellcheck; tests on Ubuntu (+ TS) and macOS bash 3.2
 ```
 
 `install.sh` generates `.claude/settings.json` and `.claude/kit/commands.env` per stack and package manager, in `gen_settings` and `gen_commands`.
@@ -94,7 +95,8 @@ tests/run.sh                 self-tests (120); KIT_TEST_TS=1 adds a real pnpm + 
 2. ~~Label the opinionated defaults as configurable in the README.~~ Done: README "Opinionated defaults" table
    (nginx-proxy, `go test -race` in CI only, every `rm` blocked).
 3. **Test on macOS** (bash 3.2). Windows Git Bash and WSL were tested in 1.2.1. If Windows-native users matter, consider `install.ps1`.
-4. **Add CI** for the kit itself: a GitHub Actions job running `tests/run.sh` and shellcheck on Ubuntu and macOS.
+4. ~~Add CI.~~ Done in 1.2.1 (`.github/workflows/ci.yml`), but **not yet observed running**: check the first run on GitHub,
+   especially the macOS bash 3.2 job, which is the first real 3.2 test (it covers open item 3).
 5. **Verify Impeccable's installer** on a networked machine, and note any hook it adds to settings.
 6. **Maybe:** a `--stack` value for other languages (Python, Kotlin) with their own rule files and `commands.env` defaults.
 

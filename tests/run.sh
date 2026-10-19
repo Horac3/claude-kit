@@ -212,6 +212,8 @@ contains "$out" "impeccable install" "design pack plans impeccable"
 contains "$out" "--skill web-design-guidelines" "design pack plans vercel guidelines"
 contains "$out" "no components.json" "design pack skips shadcn without components.json"
 contains "$out" "Nothing installed" "design pack is a dry run by default"
+# Empty command list: "${arr[@]}" on an empty array is an unbound-variable error under set -u in bash < 4.4.
+expect_exit 0 "design pack with nothing to run (empty arrays, bash 3.2)" .claude/kit/design-pack.sh shadcn
 
 echo "== context gatherer (existing project)"
 E="$WORK/legacy"; mkdir -p "$E/internal/billing" "$E/cmd/api" "$E/docs/adr"; cd "$E" || exit 1
@@ -275,6 +277,8 @@ EOF
   contains "$out" "FAIL test" "vitest failure detected"
   contains "$out" "expected 4 to be 5" "vitest assertion surfaced"
   printf '%s\n' "$out" | sed 's/^/       | /'
+elif [ "${KIT_TEST_TS:-0}" = 1 ]; then
+  ko "KIT_TEST_TS=1 needs pnpm on PATH"
 fi
 
 echo

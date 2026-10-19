@@ -41,6 +41,7 @@ if [ -f pnpm-lock.yaml ] || [ -f pnpm-workspace.yaml ]; then dlx="pnpm dlx"; fi
 SKILLS="npx -y skills@latest add"
 FLAGS="-a claude-code -y --copy"
 
+# Empty arrays are expanded as ${a[@]+"${a[@]}"}: plain "${a[@]}" is an unbound-variable error under set -u in bash < 4.4.
 declare -a CMDS=() MANUAL=() NOTES=()
 add() { CMDS+=("$1"); }
 manual() { MANUAL+=("$1"); }
@@ -81,12 +82,12 @@ if [ $list -eq 1 ]; then sed -n '9,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0; fi
 
 echo "claude-kit design pack: ${packs[*]}"
 echo "Shell commands:"
-for c in "${CMDS[@]}"; do echo "  $c"; done
+for c in ${CMDS[@]+"${CMDS[@]}"}; do echo "  $c"; done
 if [ ${#MANUAL[@]} -gt 0 ]; then
   echo "Inside Claude Code:"
   for m in "${MANUAL[@]}"; do echo "  $m"; done
 fi
-for n in "${NOTES[@]}"; do echo "  · $n"; done
+for n in ${NOTES[@]+"${NOTES[@]}"}; do echo "  · $n"; done
 
 if [ $apply -eq 0 ]; then
   echo
@@ -102,7 +103,7 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1 &&
 fi
 
 rc=0
-for c in "${CMDS[@]}"; do
+for c in ${CMDS[@]+"${CMDS[@]}"}; do
   echo "→ $c"
   bash -c "$c" || { echo "  failed (exit $?)"; rc=1; }
 done
