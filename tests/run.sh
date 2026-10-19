@@ -215,6 +215,140 @@ contains "$out" "Nothing installed" "design pack is a dry run by default"
 # Empty command list: "${arr[@]}" on an empty array is an unbound-variable error under set -u in bash < 4.4.
 expect_exit 0 "design pack with nothing to run (empty arrays, bash 3.2)" .claude/kit/design-pack.sh shadcn
 
+echo "== design pack: licence notices"
+D="$WORK/dpack"; mkdir -p "$D"; cd "$D" || exit 1
+git init -q -b main && git config user.email t@t && git config user.name t
+echo '{"name":"x","scripts":{"test":"vitest run"}}' >package.json
+"$KIT/install.sh" "$D" >/dev/null 2>&1
+git add -A && git commit -qm init
+# Fake npx/claude: create the skill folders an install would copy, with no network.
+FB="$WORK/fakebin"; mkdir -p "$FB"
+cat >"$FB/npx" <<'EOF'
+#!/bin/sh
+mk() {
+  mkdir -p ".claude/skills/$1"; echo "# $1" >".claude/skills/$1/SKILL.md"
+  if [ -n "${FAKE_UPSTREAM_LICENSE:-}" ] && [ ! -f ".claude/skills/$1/LICENSE" ]; then
+    echo "upstream-provided" >".claude/skills/$1/LICENSE"
+  fi
+}
+skills=0
+for a in "$@"; do
+  case "$a" in
+    impeccable) mk impeccable; mkdir -p .claude/agents; echo "# agent" >.claude/agents/impeccable-documenter.md ;;
+    --skill) skills=1 ;;
+    -*) skills=0 ;;
+    *) if [ "$skills" = 1 ]; then mk "$a"; fi ;;
+  esac
+done
+if [ -n "${FAKE_AGENT:-}" ]; then mkdir -p .claude/agents; echo "# agent" >".claude/agents/$FAKE_AGENT.md"; fi
+exit 0
+EOF
+printf '#!/bin/sh\nexit 0\n' >"$FB/claude"
+chmod +x "$FB/npx" "$FB/claude"
+FX="$WORK/licfx"   # <owner>__<repo>/<file>, as KIT_LICENSE_FIXTURES expects
+mkdir -p "$FX/pbakaus__impeccable" "$FX/vercel-labs__agent-skills" "$FX/Leonxlnx__taste-skill"
+printf '                                 Apache License\n                           Version 2.0, January 2004\n\n   Copyright [yyyy] [name of copyright owner]\n' >"$FX/pbakaus__impeccable/LICENSE"
+printf 'Impeccable\nCopyright 2025 Paul Bakaus\n' >"$FX/pbakaus__impeccable/NOTICE"
+printf 'MIT License\n\nCopyright (c) 2025 Vercel, Inc.\n\nPermission is hereby granted, free of charge, to any person\n' >"$FX/vercel-labs__agent-skills/LICENSE"
+printf 'Custom terms: be nice.\n' >"$FX/Leonxlnx__taste-skill/LICENSE"
+# emilkowalski__skills is deliberately missing: its fetch must fail.
+dp() { PATH="$FB:$PATH" CLAUDE_PROJECT_DIR="$D" KIT_LICENSE_FIXTURES="${FXDIR:-$FX}" .claude/kit/design-pack.sh "$@" 2>&1; }
+TPN="$D/THIRD_PARTY_NOTICES.md"
+lic_entries() { grep -c "<!-- skill:$1 -->" "$TPN"; }
+
+out="$(dp core)"
+contains "$out" "THIRD_PARTY_NOTICES.md" "dry run mentions licence notices"
+[ ! -e "$TPN" ] && [ ! -d .claude/skills/impeccable ] && [ -z "$(git status --porcelain)" ] &&
+  ok "dry run writes nothing" || ko "dry run writes nothing" "$(git status --porcelain)"
+
+out="$(dp core --apply)"; rc=$?
+[ $rc -eq 0 ] && ok "core --apply exits 0 with all licences fetched" || ko "core --apply exits 0" "$out"
+grep -q "Apache License" .claude/skills/impeccable/LICENSE 2>/dev/null && ok "copied skill gets upstream LICENSE" || ko "copied skill gets LICENSE"
+grep -q "Paul Bakaus" .claude/skills/impeccable/NOTICE 2>/dev/null && ok "Apache skill also gets NOTICE" || ko "Apache skill gets NOTICE"
+[ ! -e .claude/skills/web-design-guidelines/NOTICE ] && ok "MIT skill gets no NOTICE" || ko "MIT skill gets no NOTICE"
+[ "$(grep -cxF '<!-- claude-kit:third-party:start -->' "$TPN" 2>/dev/null)" = 1 ] &&
+  [ "$(grep -cxF '<!-- claude-kit:third-party:end -->' "$TPN")" = 1 ] &&
+  ok "THIRD_PARTY_NOTICES.md created with one marker block" || ko "notices marker block" "$(cat "$TPN" 2>/dev/null)"
+grep "<!-- skill:web-design-guidelines -->" "$TPN" | grep -q "MIT.*Copyright (c) 2025 Vercel, Inc." &&
+  ok "SPDX: MIT fixture detected, copyright line recorded" || ko "SPDX MIT" "$(cat "$TPN")"
+grep "<!-- skill:impeccable -->" "$TPN" | grep -q "Apache-2.0" && ok "SPDX: Apache fixture detected" || ko "SPDX Apache" "$(cat "$TPN")"
+grep "<!-- skill:impeccable -->" "$TPN" | grep -q "yyyy" && ko "Apache template copyright line skipped" || ok "Apache template copyright line skipped"
+grep -q "frontend-design" "$TPN" && grep -q "Used at runtime, not redistributed" "$TPN" &&
+  ok "notices cover runtime tools and the proprietary plugin" || ko "notices runtime + plugin" "$(cat "$TPN")"
+contains "$out" "THIRD_PARTY_NOTICES.md" "closing message says to commit the notices"
+grep "<!-- agent:impeccable-documenter -->" "$TPN" | grep -q 'Apache-2.0.*licence text in `.claude/skills/impeccable/LICENSE`' &&
+  ok "copied agent points to its upstream's LICENSE copy" || ko "agent entry" "$(cat "$TPN")"
+git add -A && git commit -qm "core pack"
+
+out="$(dp taste --apply)"
+grep "<!-- skill:design-taste-frontend -->" "$TPN" | grep -q "unknown — check https://github.com/Leonxlnx/taste-skill" &&
+  ok "SPDX: unrecognised licence text is unknown" || ko "SPDX unknown" "$(cat "$TPN")"
+git add -A && git commit -qm "taste pack"
+# A command that adds only an agent (its skill already exists) fetches one licence copy next to the agents.
+out="$(FAKE_AGENT=lonely-agent dp taste --apply)"
+grep -q "Custom terms" .claude/agents/LICENSE-Leonxlnx-taste-skill 2>/dev/null &&
+  grep "<!-- agent:lonely-agent -->" "$TPN" | grep -q 'licence text in `.claude/agents/LICENSE-Leonxlnx-taste-skill`' &&
+  ok "agent without a sibling skill gets its own licence copy" || ko "agent-only licence copy" "$(cat "$TPN")"
+git add -A && git commit -qm "lonely agent"
+
+# Re-install one skill: it is new again, so its entry is rewritten in place, and an upstream LICENSE is kept.
+rm -rf .claude/skills/web-design-guidelines; git add -A && git commit -qm "drop wdg"
+out="$(FAKE_UPSTREAM_LICENSE=1 dp core --apply)"
+[ "$(cat .claude/skills/web-design-guidelines/LICENSE)" = "upstream-provided" ] &&
+  ok "existing LICENSE in a skill is not overwritten" || ko "existing LICENSE kept" "$out"
+[ "$(lic_entries web-design-guidelines)" = 1 ] && [ "$(lic_entries impeccable)" = 1 ] && [ "$(lic_entries design-taste-frontend)" = 1 ] &&
+  ok "re-running keeps exactly one entry per skill" || ko "one entry per skill" "$(cat "$TPN")"
+grep "<!-- skill:web-design-guidelines -->" "$TPN" | grep -q "unknown" && ok "re-installed skill's entry updated in place" || ko "entry updated in place" "$(cat "$TPN")"
+git add -A && git commit -qm "core again"
+
+# A failed fetch warns, records "add manually", exits non-zero, and does not stop the other skills.
+rm -rf .claude/skills/web-design-guidelines; git add -A && git commit -qm "drop wdg again"
+out="$(dp core motion --apply)"; rc=$?
+[ $rc -ne 0 ] && ok "missing licence makes the run exit non-zero" || ko "missing licence exits non-zero" "$out"
+contains "$out" "emilkowalski/skills" "missing licence warning names the repo"
+grep "<!-- skill:emil-design-eng -->" "$TPN" | grep -q "licence not fetched — add manually" &&
+  ok "missing licence recorded as add manually" || ko "add manually entry" "$(cat "$TPN")"
+[ ! -e .claude/skills/emil-design-eng/LICENSE ] && ok "nothing written when the fetch fails" || ko "no LICENSE on failed fetch"
+grep -q "MIT License" .claude/skills/web-design-guidelines/LICENSE 2>/dev/null && ok "other skills still processed" || ko "other skills still processed" "$out"
+git add -A && git commit -qm "motion pack"
+
+# Content outside the markers is preserved byte for byte (including a missing final newline).
+{ printf 'Hand-written intro.\n\n'; cat "$TPN"; printf '\nHand-written footer, no final newline'; } >"$TPN.tmp" && mv "$TPN.tmp" "$TPN"
+git add -A && git commit -qm "hand edits"
+IFS= read -r -d '' before <"$TPN"
+out="$(dp devtools --apply)"
+IFS= read -r -d '' after <"$TPN"
+S='<!-- claude-kit:third-party:start -->' E='<!-- claude-kit:third-party:end -->'
+[ "${before%%"$S"*}" = "${after%%"$S"*}" ] && [ "${before#*"$E"}" = "${after#*"$E"}" ] &&
+  ok "content outside the markers preserved byte for byte" || ko "outside content preserved" "$(cat "$TPN")"
+grep -q "<!-- mcp:chrome-devtools -->" "$TPN" && ok "configured MCP server listed as runtime-only" || ko "MCP runtime entry" "$(cat "$TPN")"
+git add -A && git commit -qm "devtools"
+
+# An existing notices file without markers gets the block appended; its content stays first, unchanged.
+printf '# Notices\n\nleft-pad: MIT' >"$TPN"; git add -A && git commit -qm "own notices"
+out="$(dp devtools --apply)"
+IFS= read -r -d '' after <"$TPN"
+case "$after" in
+  "# Notices"$'\n\n'"left-pad: MIT"$'\n'*"$S"*) ok "notices file without markers: block appended" ;;
+  *) ko "block appended to unmarked file" "$after" ;;
+esac
+git add -A && git commit -qm "devtools on own notices"
+
+# Upstream without a LICENSE file (vercel-labs/agent-skills): use the licence its README declares, write no LICENSE.
+mkdir -p "$WORK/licfx2/vercel-labs__agent-skills"
+printf '# Agent Skills
+
+## License
+
+MIT
+' >"$WORK/licfx2/vercel-labs__agent-skills/README.md"
+rm -rf .claude/skills/web-design-guidelines; git add -A && git commit -qm "drop wdg for readme"
+out="$(FXDIR="$WORK/licfx2" dp core --apply)"; rc=$?
+[ $rc -eq 0 ] && grep "<!-- skill:web-design-guidelines -->" "$TPN" | grep -q "MIT (declared in the upstream README" &&
+  [ ! -e .claude/skills/web-design-guidelines/LICENSE ] &&
+  ok "no upstream LICENSE: README-declared licence recorded, nothing invented" || ko "README licence fallback" "$out"
+cd "$WORK" || exit 1
+
 echo "== context gatherer (existing project)"
 E="$WORK/legacy"; mkdir -p "$E/internal/billing" "$E/cmd/api" "$E/docs/adr"; cd "$E" || exit 1
 git init -q -b main && git config user.email t@t && git config user.name t
