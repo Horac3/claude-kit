@@ -205,6 +205,59 @@ contains "$out" "--skill web-design-guidelines" "design pack plans vercel guidel
 contains "$out" "no components.json" "design pack skips shadcn without components.json"
 contains "$out" "Nothing installed" "design pack is a dry run by default"
 
+echo "== installer: workspace commands"
+W="$WORK/pnpmws"; mkdir -p "$W/packages/a" "$W/packages/b"; cd "$W" || exit 1; git init -q
+printf 'packages:\n  - "packages/*"\n' >pnpm-workspace.yaml
+printf '{\n  "name": "root",\n  "private": true,\n  "scripts": {\n    "lint": "eslint ."\n  }\n}\n' >package.json
+printf '{ "name": "a", "scripts": { "test": "vitest run" } }\n' >packages/a/package.json
+printf '{ "name": "b", "devDependencies": { "typecheck": "1.0.0" } }\n' >packages/b/package.json
+"$KIT/install.sh" "$W" >/dev/null 2>&1
+env_file="$(cat .claude/kit/commands.env)"
+contains "$env_file" "CHECK_LINT='pnpm run lint'" "root-only lint runs at the root"
+contains "$env_file" "CHECK_TEST='pnpm -r --if-present run test'" "package-only test runs recursively"
+contains "$env_file" "CHECK_TYPECHECK=''" "script that exists nowhere is left empty"
+contains "$env_file" "CHECK_TEST_ONE='pnpm -r --if-present run test -t \"\$1\"'" "workspace test-one runs through package scripts"
+contains "$(.claude/kit/check.sh typecheck 2>&1)" "SKIP typecheck" "empty target shows SKIP"
+N="$WORK/npmws"; mkdir -p "$N/packages/a"; cd "$N" || exit 1; git init -q
+printf '{ "name": "root", "workspaces": ["packages/*"], "scripts": { "test": "npm test --workspaces" } }\n' >package.json
+echo '{}' >package-lock.json
+printf '{ "name": "a", "scripts": { "lint": "eslint ." } }\n' >packages/a/package.json
+"$KIT/install.sh" "$N" >/dev/null 2>&1
+env_file="$(cat .claude/kit/commands.env)"
+contains "$env_file" "CHECK_TEST='npm run test'" "npm workspace: root script preferred"
+contains "$env_file" "CHECK_LINT='npm run lint --workspaces --if-present'" "npm workspace: package script runs in workspaces"
+
+echo "== check runner: nothing ran"
+cd "$W" || exit 1
+fake="$WORK/fakebin"; mkdir -p "$fake"
+printf '#!/bin/sh\necho "Scope: 2 of 3 workspace projects"\n' >"$fake/pnpm"; chmod +x "$fake/pnpm"
+cat >>.claude/kit/commands.env <<'EOF'
+CHECK_LINT='pnpm -r --if-present run lint'
+CHECK_TEST='echo "No projects matched the filters in /x"'
+CHECK_FORMAT='true'
+EOF
+out="$(PATH="$fake:$PATH" .claude/kit/check.sh lint 2>&1)"
+contains "$out" "SKIP lint (nothing ran)" "runner that only prints its scope shows SKIP"
+out="$(.claude/kit/check.sh test 2>&1)"
+contains "$out" "SKIP test (nothing ran)" "\"No projects matched\" shows SKIP, not PASS"
+out="$(.claude/kit/check.sh format 2>&1)"
+contains "$out" "PASS format" "silent non-runner command (go vet, gofmt -l) still passes"
+
+echo "== installer: --frontend"
+F="$WORK/gohtml"; mkdir -p "$F"; cd "$F" || exit 1; git init -q
+printf 'module example.com/web\n\ngo 1.22\n' >go.mod
+out="$("$KIT/install.sh" --frontend "$F" 2>&1)"
+for f in .claude/rules/kit/frontend.md .claude/skills/ui/SKILL.md .claude/agents/ui-checker.md \
+  .claude/kit/shot.mjs .claude/kit/design-pack.sh; do
+  [ -f "$f" ] && ok "--frontend installs $f" || ko "--frontend installs $f" "$out"
+done
+[ ! -f .claude/rules/kit/typescript.md ] && ok "--frontend does not add the TypeScript rule" || ko "--frontend adds no TS rule"
+grep -q '^frontend=1' .claude/kit/manifest && ok "manifest records frontend" || ko "manifest records frontend"
+grep -qF 'Bash(node .claude/kit/shot.mjs *)' .claude/settings.json && ok "--frontend allows shot.mjs" || ko "--frontend allows shot.mjs"
+out="$("$K2/install.sh" --update "$F" 2>&1)"
+[ -f .claude/skills/ui/SKILL.md ] && ! printf '%s' "$out" | grep -qE "obsolete .*(ui|shot|frontend|design-pack)" && grep -q '^frontend=1' .claude/kit/manifest &&
+  ok "--update keeps the frontend layer" || ko "--update keeps the frontend layer" "$out"
+
 echo "== context gatherer (existing project)"
 E="$WORK/legacy"; mkdir -p "$E/internal/billing" "$E/cmd/api" "$E/docs/adr"; cd "$E" || exit 1
 git init -q -b main && git config user.email t@t && git config user.name t

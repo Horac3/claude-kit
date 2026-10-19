@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # claude-kit installer and updater.
 #
-#   ./install.sh [--stack go|ts|both|auto] [--dry-run] [TARGET_DIR]    first install (default target: .)
-#   ./install.sh --update [--dry-run] [TARGET_DIR]                     pull a newer kit into a project
+#   ./install.sh [--stack go|ts|both|auto] [--frontend] [--dry-run] [TARGET_DIR]   first install (default: .)
+#   ./install.sh --update [--frontend] [--dry-run] [TARGET_DIR]                    pull a newer kit into a project
+#
+# --frontend adds the frontend layer (frontend rule, /ui, ui-checker, shot.mjs, design-pack.sh) to any stack, e.g. a
+# Go service rendering HTML templates. ts and both stacks always have it. It is recorded, so --update keeps it.
 #
 # Two kinds of files:
 #   kit files      (.claude/skills, agents, hooks, rules/kit, kit/*.sh) belong to the kit. On --update they are
@@ -18,14 +21,15 @@ set -euo pipefail
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KIT_VERSION="$(tr -d '[:space:]' <"$KIT_DIR/VERSION")"
 
-stack="auto" mode="install" dry=0 target="."
+stack="auto" mode="install" dry=0 frontend=0 target="."
 while [ $# -gt 0 ]; do
   case "$1" in
     --stack) stack="${2:-}"; shift 2 ;;
     --stack=*) stack="${1#*=}"; shift ;;
     --update) mode="update"; shift ;;
     --dry-run) dry=1; shift ;;
-    -h | --help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --frontend) frontend=1; shift ;;
+    -h | --help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) target="$1"; shift ;;
   esac
@@ -122,12 +126,51 @@ elif [ -f "$target/yarn.lock" ]; then pm=yarn
 elif [ -f "$target/package-lock.json" ]; then pm=npm
 fi
 [ "$mode" = "update" ] && [ -n "$(meta pm)" ] && pm="$(meta pm)"
+[ "$mode" = "update" ] && [ "$(meta frontend)" = 1 ] && frontend=1
+[ "$stack" != go ] && frontend=1   # ts and both stacks always get the frontend layer
+
+# The frontend part of the TypeScript stack, installable on its own with --frontend.
+is_frontend_file() {
+  case "$1" in
+    .claude/rules/kit/frontend.md | .claude/skills/ui/* | .claude/agents/ui-checker.md | \
+      .claude/kit/shot.mjs | .claude/kit/design-pack.sh) return 0 ;;
+  esac
+  return 1
+}
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT   # only the installer's own temp dir
 
 # ---------- generated project files ----------
-has_script() { [ -f "$target/package.json" ] && grep -Eq "\"$1\"[[:space:]]*:" "$target/package.json"; }
+script_in() { # script_in <package.json> <name>: the file's "scripts" block defines <name>
+  [ -f "$1" ] && sed -n '/"scripts"[[:space:]]*:/,/}/p' "$1" | grep -Eq "\"$2\"[[:space:]]*:"
+}
+has_script() { script_in "$target/package.json" "$1"; }
+pkg_has_script() { # a workspace package (not the root) defines the script
+  local f
+  while IFS= read -r f; do
+    script_in "$f" "$1" && return 0
+  done < <(find "$target" -mindepth 2 -maxdepth 5 \( -name node_modules -o -name .git \) -prune -o -name package.json -print 2>/dev/null)
+  return 1
+}
+at_root() { # at_root <script> [args]: the root package's script
+  local s="$1"; shift
+  case "$pm" in npm) echo "npm run $s${1:+ -- $*}" ;; *) echo "$pm run $s${1:+ $*}" ;; esac
+}
+recursive() { # recursive <script> [args]: the script in every workspace package that has it
+  local s="$1"; shift
+  case "$pm" in
+    pnpm) echo "pnpm -r --if-present run $s${1:+ $*}" ;;
+    npm)  echo "npm run $s --workspaces --if-present${1:+ -- $*}" ;;
+    yarn) if [ -f "$target/.yarnrc.yml" ]; then echo "yarn workspaces foreach -A run $s${1:+ $*}"
+          else echo "yarn workspaces run $s${1:+ $*}"; fi ;;
+    bun)  echo "bun run --filter '*' $s${1:+ $*}" ;;
+  esac
+}
+ws_script() { # ws_script <script>: prefer the root script (pnpm -r skips the root), else recurse, else nothing
+  if has_script "$1"; then at_root "$1"; elif pkg_has_script "$1"; then recursive "$1"; fi
+}
+and_then() { if [ -n "$2" ]; then echo "($1) && ($2)"; else echo "$1"; fi; }
 
 gen_commands() {
   local go_tc="go build ./... && go vet ./..."
@@ -137,24 +180,34 @@ gen_commands() {
   local go_fmt='gofmt -l .'
   local run exec ws=0 ts_tc ts_lint ts_test ts_one ts_fmt
   case "$pm" in
-    pnpm) exec="pnpm exec"; [ -f "$target/pnpm-workspace.yaml" ] && ws=1
-          if [ $ws -eq 1 ]; then run="pnpm -r --if-present run"; else run="pnpm run --if-present"; fi ;;
+    pnpm) exec="pnpm exec"; run="pnpm run --if-present"; [ -f "$target/pnpm-workspace.yaml" ] && ws=1 ;;
     npm)  exec="npx --no-install"; run="npm run --if-present" ;;
     yarn) exec="yarn"; run="yarn run" ;;
     bun)  exec="bunx"; run="bun run" ;;
   esac
-  if [ $ws -eq 1 ] || has_script typecheck; then ts_tc="$run typecheck"; else ts_tc="$exec tsc --noEmit"; fi
-  if [ $ws -eq 1 ] || has_script lint; then ts_lint="$run lint"; else ts_lint=""; fi
-  if [ $ws -eq 1 ] || has_script test; then ts_test="$run test"; else ts_test="$exec vitest run"; fi
-  ts_one="$exec vitest run -t \"\$1\""
+  [ "$pm" != pnpm ] && grep -q '"workspaces"[[:space:]]*:' "$target/package.json" 2>/dev/null && ws=1
+  if [ $ws -eq 1 ]; then
+    # Workspace: a value stays empty (SKIP) when neither the root nor any package defines the script.
+    ts_tc="$(ws_script typecheck)"; ts_lint="$(ws_script lint)"; ts_test="$(ws_script test)"
+    # vitest is rarely installed at a workspace root: pass the filter to each package's test script instead.
+    if pkg_has_script test; then ts_one="$(recursive test '-t "$1"')"
+    elif has_script test; then ts_one="$(at_root test '-t "$1"')"
+    else ts_one=""; fi
+  else
+    if has_script typecheck; then ts_tc="$run typecheck"; else ts_tc="$exec tsc --noEmit"; fi
+    if has_script lint; then ts_lint="$run lint"; else ts_lint=""; fi
+    if has_script test; then ts_test="$run test"; else ts_test="$exec vitest run"; fi
+    ts_one="$exec vitest run -t \"\$1\""
+  fi
   ts_fmt="$exec prettier --check ."
 
   local tc lint test one fmt
   case "$stack" in
     go)   tc="$go_tc"; lint="$go_lint"; test="$go_test"; one="$go_one"; fmt="$go_fmt" ;;
     ts)   tc="$ts_tc"; lint="$ts_lint"; test="$ts_test"; one="$ts_one"; fmt="$ts_fmt" ;;
-    both) tc="($go_tc) && ($ts_tc)"; lint="($go_lint)${ts_lint:+ && ($ts_lint)}"
-          test="($go_test) && ($ts_test)"; one="($go_one); ($ts_one)"; fmt="($go_fmt) && ($ts_fmt)" ;;
+    both) tc="$(and_then "$go_tc" "$ts_tc")"; lint="$(and_then "$go_lint" "$ts_lint")"
+          test="$(and_then "$go_test" "$ts_test")"; one="($go_one)${ts_one:+; ($ts_one)}"
+          fmt="$(and_then "$go_fmt" "$ts_fmt")" ;;
   esac
   q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
   cat <<EOF
@@ -212,11 +265,14 @@ gen_settings() {
   if [ "$stack" != go ]; then
     local x
     case "$pm" in pnpm) x="pnpm exec" ;; npm) x="npx" ;; yarn) x="yarn" ;; bun) x="bunx" ;; esac
-    allow+=("Bash($x tsc --noEmit *)" "Bash($x vitest run *)" "Bash($pm ls *)" "Bash($pm why *)"
-      "Bash(node .claude/kit/shot.mjs *)" "Bash(npx -y impeccable detect *)" "Bash(npx impeccable detect *)"
-      "Bash(.claude/kit/design-pack.sh)" "Bash(.claude/kit/design-pack.sh --list)")
+    allow+=("Bash($x tsc --noEmit *)" "Bash($x vitest run *)" "Bash($pm ls *)" "Bash($pm why *)")
     ask+=("Bash($pm add *)" "Bash($pm install *)" "Bash($pm remove *)" "Bash($pm update *)"
       "Bash($pm run *)" "Bash($pm dlx *)" "Bash(npx *)" "Bash($x prettier --write *)")
+  fi
+  if [ "$frontend" -eq 1 ]; then
+    allow+=("Bash(node .claude/kit/shot.mjs *)" "Bash(npx -y impeccable detect *)" "Bash(npx impeccable detect *)"
+      "Bash(.claude/kit/design-pack.sh)" "Bash(.claude/kit/design-pack.sh --list)")
+    [ "$stack" = go ] && ask+=("Bash(npx *)")
   fi
   cat <<EOF
 {
@@ -260,7 +316,7 @@ EOF
 }
 
 # ---------- run ----------
-echo "claude-kit $KIT_VERSION → $target  (mode: $mode, stack: $stack$( [ "$stack" != go ] && printf ', pm: %s' "$pm"))"
+echo "claude-kit $KIT_VERSION → $target  (mode: $mode, stack: $stack$( [ "$stack" != go ] && printf ', pm: %s' "$pm")$( [ "$stack" = go ] && [ "$frontend" -eq 1 ] && printf ' + frontend'))"
 [ "$dry" -eq 1 ] && echo "(dry run: nothing will be written)"
 if [ "$mode" = "update" ] && [ ! -f "$manifest" ]; then
   echo "No manifest at .claude/kit/manifest: this looks like a first install. Run without --update." >&2
@@ -278,6 +334,12 @@ for s in go ts; do
     done < <(find "$KIT_DIR/stacks/$s" -type f -print0 | sort -z)
   fi
 done
+if [ "$stack" = go ] && [ "$frontend" -eq 1 ]; then
+  while IFS= read -r -d '' f; do
+    rel="${f#"$KIT_DIR/stacks/ts/"}"
+    if is_frontend_file "$rel"; then install_kit_file "$f" "$rel"; fi
+  done < <(find "$KIT_DIR/stacks/ts" -type f -print0 | sort -z)
+fi
 
 # project files
 for f in CLAUDE.md docs/progress.md docs/decisions.md docs/requirements.md; do
@@ -313,6 +375,7 @@ if [ "$dry" -eq 0 ]; then
     echo "version=$KIT_VERSION"
     echo "stack=$stack"
     echo "pm=$pm"
+    echo "frontend=$frontend"
     printf '%s\n' "${NEW_MANIFEST[@]}"
   } >"$manifest"
 fi
