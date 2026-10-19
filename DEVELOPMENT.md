@@ -28,7 +28,7 @@ stacks/go/.claude/           go.md rule
 stacks/ts/.claude/           typescript.md, frontend.md rules; /ui skill; ui-checker agent; shot.mjs; design-pack.sh
 scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md
 examples/keepsake/           the author's real project migrated to the kit (see open item 1)
-tests/run.sh                 self-tests (119); KIT_TEST_TS=1 adds a real pnpm + vitest project
+tests/run.sh                 self-tests (136); KIT_TEST_TS=1 adds a real pnpm + vitest project
 ```
 
 `install.sh` generates `.claude/settings.json` and `.claude/kit/commands.env` per stack and package manager, in `gen_settings` and `gen_commands`.
@@ -71,7 +71,14 @@ tests/run.sh                 self-tests (119); KIT_TEST_TS=1 adds a real pnpm + 
 ## Verified vs not verified
 
 **Verified:**
-- All 119 self-tests pass, and `shellcheck -S warning` is clean on every script.
+- All 136 self-tests pass, and `shellcheck -S warning` is clean on every script.
+- **Verified on a real monorepo (1.3.0):** installing 1.2.0 into keeper (pnpm, 13 packages, lint only at the root,
+  integration tests needing Postgres, Redis and S3) exposed the false-green lint, the root `vitest` in `CHECK_TEST_ONE`,
+  and PASS when nothing ran (task 02). The fixes were checked against real pnpm on a workspace. `pnpm -r --if-present run lint` with
+  no package script prints only `Scope: N of M workspace projects` and exits 0, so `check.sh` ignores that line.
+  pnpm forwards `-t <pattern>` to each package's script.
+- Windows (Git Bash): 134 of 136 pass. The two "guard works with python3 only / no JSON tool" tests fail there
+  because they symlink binaries into a fake PATH, which Git Bash doesn't support. That is a test-harness limitation, not the guard.
 - Headless runs of real Claude Code against an installed project: the guard blocked `rm` and the file survived; agents, rules and the SessionStart hook loaded; `test-runner` ran `check.sh`; `ui-checker` caught every planted defect.
 - `context.sh` against a real repo (go-chi/chi): hotspots, drift of 150 commits, and a dangling path were all detected.
 - A real `npx skills add` install of Vercel's and Emil Kowalski's skills; `claude mcp add ... --scope project` writes `.mcp.json`.
@@ -85,6 +92,17 @@ tests/run.sh                 self-tests (119); KIT_TEST_TS=1 adds a real pnpm + 
 ## Open items (in priority order)
 
 0. **Licence notices and credits:** see `tasks/01-licensing-and-credits.md`. It is a self-contained prompt; run it first.
+
+   **Done: monorepo fixes** (`tasks/02-monorepo-fixes.md`, 1.3.0):
+   - [x] 1 root-first workspace scripts, empty when no package has the script
+   - [x] 2 workspace `CHECK_TEST_ONE` via package scripts
+   - [x] 3 `check.sh` SKIP when nothing ran
+   - [x] 4 integration-test split pattern (HOW_TO_USE §11)
+   - [x] 5 `/decide` follows the existing decision-log style
+   - [x] 6 handoff archive in existing-project `/kickoff`
+   - [x] 7 folder globs in example rules, plus a README note
+   - [x] 8 `--frontend`
+   - [ ] CI green on Ubuntu and macOS bash 3.2 (there is no CI workflow yet: open item 4)
 
 1. **Public-repo cleanup.**
    - Replace `examples/keepsake/` with a fictional example project; the current one exposes a real product's retention and compliance details.
