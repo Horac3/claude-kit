@@ -299,7 +299,7 @@ gradients, gradient text, overused fonts like Inter, buzzword copy, and low cont
 ### 8.2 Add the design pack (optional)
 
 For stronger design taste, install curated third-party design skills into the project. Run this in your terminal,
-not through Claude, because the installers may change `.claude/settings.json`:
+not through Claude, because the installers may add hooks (Impeccable writes them to `.claude/settings.local.json`):
 
 ```bash
 git add -A && git commit -m "wip"                # the script refuses to run with uncommitted .claude/ changes
@@ -310,7 +310,11 @@ git add -A && git commit -m "wip"                # the script refuses to run wit
 
 Then, inside Claude Code, add Anthropic's skill: `/plugin install frontend-design@claude-plugins-official`.
 
-Review what was added (`git status`), read the new `.claude/skills/*`, and commit them together with `skills-lock.json`.
+Review what was added (`git status`), read the new `.claude/skills/*` and `.claude/agents/*`, and commit them together with
+`skills-lock.json`, `THIRD_PARTY_NOTICES.md`, and the per-skill `LICENSE` and `NOTICE` files. The upstream installers copy
+skills without their licences, so the script fetches each one and lists them in `THIRD_PARTY_NOTICES.md`; a public repo needs
+those notices. The script only edits the marked block in that file, so your own entries outside it are safe.
+**Never commit Anthropic's `frontend-design` plugin files:** the plugin is proprietary, and each person installs it themselves.
 The README's [Design pack](README.md#design-pack-optional-ts-projects) section explains what each tool does and why some are left out.
 
 **Give the project a `DESIGN.md`.** Once the pack is installed, ask for `/impeccable document`, or copy a reference from
@@ -414,6 +418,7 @@ Then review with `git diff` and commit: `chore: update claude-kit to 1.x.y`. See
 | Tests pass in your terminal but `check.sh` says FAIL | Read `.claude/kit/logs/<target>.log`. `check.sh` runs with `CI=1` and no colour, which some tools treat differently. |
 | `shot.mjs: the project has no playwright package` | Run the one-time setup in [§8.1](#81-frontend-work-ui). |
 | `design-pack.sh` says a download failed | The installer needs internet access to its upstream (GitHub, npm, impeccable.style). Retry, or run that one command by hand. The other packs are unaffected. |
+| `design-pack.sh` says "could not fetch the licence" and exits non-zero | The skills were installed, but their upstream `LICENSE` couldn't be downloaded (offline, or the repo moved its licence). `THIRD_PARTY_NOTICES.md` marks them "licence not fetched — add manually". Copy the LICENSE from the upstream repo into that skill folder (or next to the agent) and update the entry before committing. |
 | `shot.mjs: could not start Chromium` | Run `pnpm exec playwright install chromium`, or point `CHROMIUM_PATH` at an installed Chrome or Chromium. |
 | Session start says the architecture map is stale | Run `/remap`. It updates only the parts that changed. |
 | `bad interpreter` or `$'\r': command not found` (Windows) | The scripts have CRLF line endings. Re-clone the kit with LF endings (see [step 2](#2-get-the-kit)) and re-run the installer. |

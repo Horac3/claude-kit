@@ -28,7 +28,7 @@ stacks/go/.claude/           go.md rule
 stacks/ts/.claude/           typescript.md, frontend.md rules; /ui skill; ui-checker agent; shot.mjs; design-pack.sh
 scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md
 examples/tally/              fictional project showing a migrated CLAUDE.md and path-scoped rules
-tests/run.sh                 self-tests (121); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
+tests/run.sh                 self-tests (148); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
 .github/workflows/ci.yml     shellcheck; tests on Ubuntu (+ TS) and macOS bash 3.2
 ```
 
@@ -52,6 +52,9 @@ tests/run.sh                 self-tests (121); KIT_TEST_TS=1 adds a real pnpm + 
    - Long third-party rule fetches (Vercel guidelines) run in a subagent.
 6. **Skill `!` injection blocks must not fail.** A non-zero exit aborts the whole skill, so end them with `true` or a pipe to `head`.
 7. **Third-party design tools are installed from upstream by `design-pack.sh`, never vendored.** It is a dry run by default and refuses to run with uncommitted `.claude/` changes.
+   - With `--apply` it writes each copied skill's or agent's upstream `LICENSE` (and `NOTICE`) and never overwrites an existing one.
+   - In `THIRD_PARTY_NOTICES.md` it owns only the block between the `claude-kit:third-party` markers. Re-runs keep one entry per item, updated in place, and leave everything outside the block byte for byte.
+   - It stays bash 3.2-safe (CI runs it on macOS): no associative arrays, and possibly-empty arrays are expanded as `${a[@]+"${a[@]}"}`.
 
 ## Decisions (and why)
 
@@ -66,14 +69,16 @@ tests/run.sh                 self-tests (121); KIT_TEST_TS=1 adds a real pnpm + 
 | `Write` on tracked files is blocked | Full rewrites silently lose code. Edit only; new or untracked files are fine. |
 | `shot.mjs` turns `isMobile` off | Mobile emulation widens the layout viewport to fit content, which hides horizontal overflow (found in testing). |
 | `impeccable detect` in `ui-checker` | A deterministic scan for generic "AI-made" design patterns that costs no model tokens. Verified on a test page: 7 findings. |
+| Licence notices written at install time | Upstream installers copy skills and agents without their LICENSE files, so a public project would redistribute MIT/Apache files without the required notices. The SPDX id comes from matching the licence text, not the GitHub API, which is rate-limited when unauthenticated. |
 | Design pack is opt-in | Each model-invocable skill adds its description to every session (core adds 3, all about 8). Taste skills overlap, so keep one main voice. |
 | Bash only (Git Bash or WSL on Windows) | One implementation to test. `.gitattributes` forces LF so scripts survive Windows clones; `install.sh` appends the same rule to each project, because CRLF hooks fail open under Linux bash. |
 
 ## Verified vs not verified
 
 **Verified:**
-- All 120 self-tests pass on Windows Git Bash (2026-10-19). Under WSL (kali) the 116 that do not need Go or Node pass; the suite assumes `go` and `node` are installed.
-- `shellcheck -S warning` was clean on every script for 1.2.0; not re-run for 1.2.1 (not installed on the Windows machine).
+- All 148 self-tests pass on Windows Git Bash (151 with `KIT_TEST_TS=1`, 2026-10-19). Under WSL (kali) the 116 that do not need Go or Node pass; the suite assumes `go` and `node` are installed.
+- `shellcheck -S warning` (0.11.0) is clean on every script for 1.3.0.
+- Real `design-pack.sh core motion --apply` (network, 2026-10-19): 6 skills and 4 agents installed, each with a correct licence entry.
 - Windows: an install committed under `core.autocrlf=true` and re-cloned keeps LF hooks, and the guard blocks under WSL (kali) bash.
 - Headless runs of real Claude Code against an installed project: the guard blocked `rm` and the file survived; agents, rules and the SessionStart hook loaded; `test-runner` ran `check.sh`; `ui-checker` caught every planted defect.
 - `context.sh` against a real repo (go-chi/chi): hotspots, drift of 150 commits, and a dangling path were all detected.
@@ -97,8 +102,12 @@ tests/run.sh                 self-tests (121); KIT_TEST_TS=1 adds a real pnpm + 
 3. **Test on macOS** (bash 3.2). Windows Git Bash and WSL were tested in 1.2.1. If Windows-native users matter, consider `install.ps1`.
 4. ~~Add CI.~~ Done in 1.2.1 (`.github/workflows/ci.yml`), but **not yet observed running**: check the first run on GitHub,
    especially the macOS bash 3.2 job, which is the first real 3.2 test (it covers open item 3).
-5. **Verify Impeccable's installer** on a networked machine, and note any hook it adds to settings.
-6. **Maybe:** a `--stack` value for other languages (Python, Kotlin) with their own rule files and `commands.env` defaults.
+5. ~~Verify Impeccable's installer.~~ Verified on 2026-10-19 (`design-pack.sh core motion --apply`). It copies `.claude/skills/impeccable/`
+   plus 4 agents (`.claude/agents/impeccable-*.md`), and writes SessionStart, PostToolUse (Edit|Write) and Stop hooks to
+   **`.claude/settings.local.json`**, which is gitignored. Its hooks are therefore per machine: teammates who clone the repo don't get them.
+6. ~~Licence notices, CREDITS.md and the kit's LICENSE (`tasks/01-licensing-and-credits.md`).~~ Done in 1.3.0. Still open:
+   the second video creator's credit (`TODO(credit)` in `CREDITS.md`).
+7. **Maybe:** a `--stack` value for other languages (Python, Kotlin) with their own rule files and `commands.env` defaults.
 
 ## How to work on the kit
 

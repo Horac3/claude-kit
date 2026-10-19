@@ -143,7 +143,11 @@ curated set into the project from their upstream sources. Nothing is vendored, a
 **Token note.** Every skill Claude can invoke automatically adds its description to every session. The core pack adds 3,
 and the full set about 8. That's why the packs are opt-in and the motion pack installs a subset. Third-party skills run with
 full agent permissions, so read them before committing. Run the script yourself (or with `!`): installers such as Impeccable
-add hooks to `.claude/settings.json`, which the kit's guards deliberately stop Claude from editing.
+add hooks to `.claude/settings.local.json` (per machine, gitignored), which the kit's guards deliberately stop Claude from editing.
+
+**Licences.** Upstream installers copy skills and agents without their LICENSE files, so `--apply` writes each one's upstream
+`LICENSE` (and `NOTICE`) next to it and lists them in `THIRD_PARTY_NOTICES.md`; commit those with the skills. It never
+overwrites an existing file. The projects behind the kit are credited in [CREDITS.md](CREDITS.md).
 
 ## Updating
 
@@ -227,3 +231,7 @@ KIT_TEST_TS=1 tests/run.sh  # also builds a real pnpm + vitest project (needs ne
 ```
 
 Bump `VERSION` and add a line to `CHANGELOG.md` with each change, so projects can see what `--update` brings.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Third-party tools the kit integrates are credited in [CREDITS.md](CREDITS.md).
