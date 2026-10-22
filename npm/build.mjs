@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Builds the npm packages for a release from GoReleaser's output.
 //
-//   node npm/build.mjs --version 1.5.0 [--dist dist] [--out dist/npm] [--scope @never9to5ive]
+//   node npm/build.mjs --version 1.5.0 [--dist dist] [--out dist/npm] [--scope @horac3]
 //
 // Reads <dist>/artifacts.json (written by GoReleaser), and for every built binary writes a platform package
 // <scope>/claude-kit-<platform>-<arch> containing only that binary, with "os"/"cpu" set so npm installs it only
@@ -19,7 +19,7 @@ const args = Object.fromEntries(
 );
 const version = (args.version || '').replace(/^v/, '');
 if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
-  console.error('usage: node npm/build.mjs --version X.Y.Z [--dist dist] [--out dist/npm] [--scope @never9to5ive]');
+  console.error('usage: node npm/build.mjs --version X.Y.Z [--dist dist] [--out dist/npm] [--scope @horac3]');
   process.exit(2);
 }
 const dist = resolve(args.dist || join(repo, 'dist'));
@@ -56,7 +56,7 @@ for (const a of artifacts) {
       {
         name,
         version,
-        description: `claude-kit binary for ${os}-${cpu}. Install "@never9to5ive/claude-kit" instead; it picks this up automatically.`,
+        description: `claude-kit binary for ${os}-${cpu}. Install "@horac3/claude-kit" instead; it picks this up automatically.`,
         repository: { type: 'git', url: 'git+https://github.com/horac3/claude-kit.git' },
         license: 'MIT',
         os: [os],

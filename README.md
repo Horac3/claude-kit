@@ -9,7 +9,7 @@ A drop-in Claude Code setup for Go and TypeScript projects. It focuses on four t
 
 ```bash
 cd ~/code/my-project
-npx @never9to5ive/claude-kit init                               # Node/TS developers
+npx @horac3/claude-kit init                               # Node/TS developers
 # or: go install github.com/horac3/claude-kit/cmd/claude-kit@latest && claude-kit init
 claude                                            # then: /kickoff
 ```
@@ -18,7 +18,7 @@ The same installer ships four ways, and they install identical files (CI checks 
 
 | Route | Install | Needs |
 |---|---|---|
-| npm | `npx @never9to5ive/claude-kit init` | Node 18+ and bash |
+| npm | `npx @horac3/claude-kit init` | Node 18+ and bash |
 | Go | `go install github.com/horac3/claude-kit/cmd/claude-kit@latest` | Go and bash |
 | Binary | download from [Releases](https://github.com/horac3/claude-kit/releases) | bash |
 | Git | `git clone https://github.com/horac3/claude-kit ~/claude-kit && ~/claude-kit/install.sh .` | bash |
@@ -166,7 +166,7 @@ overwrites an existing file. The projects behind the kit are credited in [CREDIT
 ## Updating
 
 ```bash
-npx @never9to5ive/claude-kit@latest update            # npm route; add --dry-run to preview
+npx @horac3/claude-kit@latest update            # npm route; add --dry-run to preview
 claude-kit update                       # Go/binary route, after installing the newer binary
 git -C ~/claude-kit pull && ~/claude-kit/install.sh --update .   # git route
 ```

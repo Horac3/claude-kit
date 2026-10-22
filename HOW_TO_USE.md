@@ -44,16 +44,16 @@ Pick whichever route suits your machine. They install exactly the same files; CI
 
 | Route | Command | You need |
 |---|---|---|
-| **npm** (nothing to keep installed) | `npx @never9to5ive/claude-kit <command>` | Node 18+ |
+| **npm** (nothing to keep installed) | `npx @horac3/claude-kit <command>` | Node 18+ |
 | **Go** | `go install github.com/horac3/claude-kit/cmd/claude-kit@latest` | Go, with `$(go env GOPATH)/bin` on your PATH |
 | **Binary** | Download your platform's archive from [Releases](https://github.com/horac3/claude-kit/releases), check it against `checksums.txt`, and put `claude-kit` on your PATH | Nothing extra |
 | **Git clone** | `git clone https://github.com/horac3/claude-kit.git ~/claude-kit` | Nothing extra |
 
 All routes need bash to run (on Windows, Git Bash). The rest of this guide shows the `claude-kit` command.
-With npm, put `npx` in front (`npx @never9to5ive/claude-kit init`). With a git clone, use `~/claude-kit/install.sh`,
+With npm, put `npx` in front (`npx @horac3/claude-kit init`). With a git clone, use `~/claude-kit/install.sh`,
 and `--update` instead of `update`.
 
-> **Pin a version** for a team or CI: `npx @never9to5ive/claude-kit@1.5.0 init`, or `go install …/cmd/claude-kit@v1.5.0`.
+> **Pin a version** for a team or CI: `npx @horac3/claude-kit@1.5.0 init`, or `go install …/cmd/claude-kit@v1.5.0`.
 
 > **Windows and git clones:** clone with LF line endings so the scripts run in Git Bash. The repo's
 > `.gitattributes` handles this. If you cloned before it existed, run `git config core.autocrlf false` and clone again.
@@ -440,8 +440,8 @@ Get the newer kit, then preview and apply:
 
 ```bash
 # npm: npx always fetches the version you name
-npx @never9to5ive/claude-kit@latest update --dry-run ~/code/my-project
-npx @never9to5ive/claude-kit@latest update ~/code/my-project
+npx @horac3/claude-kit@latest update --dry-run ~/code/my-project
+npx @horac3/claude-kit@latest update ~/code/my-project
 
 # Go / binary: install the newer binary first
 go install github.com/horac3/claude-kit/cmd/claude-kit@latest

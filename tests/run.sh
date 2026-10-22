@@ -451,7 +451,7 @@ grep -qx 'via=git' "$P/.claude/kit/manifest" && ok "clone install records via=gi
 R="$WORK/viaroute"; mkdir -p "$R"; (cd "$R" && git init -q && printf 'module x\n\ngo 1.22\n' >go.mod)
 out="$(CLAUDE_KIT_VIA=npm "$KIT/install.sh" "$R" 2>&1)"
 grep -qx 'via=npm' "$R/.claude/kit/manifest" && ok "CLAUDE_KIT_VIA=npm is recorded" || ko "CLAUDE_KIT_VIA=npm is recorded"
-contains "$out" "npx @never9to5ive/claude-kit@latest update" "update hint matches npm route"
+contains "$out" "npx @horac3/claude-kit@latest update" "update hint matches npm route"
 R2="$WORK/viabad"; mkdir -p "$R2"; (cd "$R2" && git init -q && printf 'module x\n\ngo 1.22\n' >go.mod)
 CLAUDE_KIT_VIA='evil;rm' "$KIT/install.sh" "$R2" >/dev/null 2>&1
 grep -qx 'via=git' "$R2/.claude/kit/manifest" && ok "unknown route falls back to git" || ko "unknown route falls back to git"
@@ -491,8 +491,8 @@ EOF
   # Unscoped "claude-kit" is blocked by npm (too close to "claudekit"), so the launcher and platforms share one scope.
   node "$KIT/npm/build.mjs" --version 9.8.7 --dist "$N/dist" --out "$N/out-default" >/dev/null 2>&1
   L="$N/out-default/claude-kit/package.json"
-  node -e "const p=require('$L');const d=Object.keys(p.optionalDependencies);process.exit(p.name==='@never9to5ive/claude-kit'&&p.bin['claude-kit']&&d.length&&d.every(n=>n.startsWith('@never9to5ive/claude-kit-'))?0:1)" &&
-    ok "launcher and platform packages share the @never9to5ive scope; command stays claude-kit" || ko "npm package scope" "$(cat "$L")"
+  node -e "const p=require('$L');const d=Object.keys(p.optionalDependencies);process.exit(p.name==='@horac3/claude-kit'&&p.bin['claude-kit']&&d.length&&d.every(n=>n.startsWith('@horac3/claude-kit-'))?0:1)" &&
+    ok "launcher and platform packages share the @horac3 scope; command stays claude-kit" || ko "npm package scope" "$(cat "$L")"
   L="$N/out/claude-kit/package.json"
   [ -x "$N/out/claude-kit-linux-x64/bin/claude-kit" ] && ok "unix binary is executable in its package" || ko "unix binary executable"
   [ -f "$N/out/claude-kit-win32-arm64/bin/claude-kit.exe" ] && ok "windows binary named .exe" || ko "windows binary named .exe"

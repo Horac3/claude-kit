@@ -138,8 +138,8 @@ npm/build.mjs                builds the launcher + 6 platform packages from GoRe
 6. ~~Licence notices, CREDITS.md and the kit's LICENSE (`tasks/01-licensing-and-credits.md`).~~ Done in 1.3.0. Still open:
    the second video creator's credit (`TODO(credit)` in `CREDITS.md`).
 7. **Publish the package (1.5.0).** Everything is built and tested except the real publish:
-   - Everything publishes under the npm user scope `@never9to5ive` (the maintainer's npm account): the launcher
-     `@never9to5ive/claude-kit` and six `@never9to5ive/claude-kit-<os>-<arch>` packages. Unscoped `claude-kit` is not
+   - Everything publishes under the npm organisation scope `@horac3` (an org owned by the maintainer's npm account, never9to5ive): the launcher
+     `@horac3/claude-kit` and six `@horac3/claude-kit-<os>-<arch>` packages. Unscoped `claude-kit` is not
      usable: npm rejects names that differ from an existing package (`claudekit`) only by punctuation.
    - First release: a granular access token (read and write, bypass 2FA, short expiry) as the `NPM_TOKEN` repo secret.
      Then move to trusted publishing on all seven packages and drop the token: npm removes direct publishing from

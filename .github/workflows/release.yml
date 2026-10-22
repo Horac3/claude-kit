@@ -5,7 +5,7 @@ name: release
 #   3. npm packages are built from those binaries and published with provenance (platform packages first).
 # `go install github.com/horac3/claude-kit/cmd/claude-kit@vX.Y.Z` works from the tag itself.
 #
-# Secrets: NPM_TOKEN, an npm automation token allowed to publish the @never9to5ive scope.
+# Secrets: NPM_TOKEN, an npm automation token allowed to publish the @horac3 scope.
 # (Or configure npm trusted publishing for this workflow and drop the token.)
 
 on:
@@ -85,6 +85,6 @@ jobs:
       - name: Smoke test the published package
         run: |
           mkdir -p /tmp/smoke && cd /tmp/smoke && git init -q && printf 'module example.com/x\n\ngo 1.22\n' > go.mod
-          for i in 1 2 3 4 5; do npx -y "@never9to5ive/claude-kit@$VERSION" version && break; sleep 20; done
-          npx -y "@never9to5ive/claude-kit@$VERSION" init .
+          for i in 1 2 3 4 5; do npx -y "@horac3/claude-kit@$VERSION" version && break; sleep 20; done
+          npx -y "@horac3/claude-kit@$VERSION" init .
           grep -q '^via=npm' .claude/kit/manifest
