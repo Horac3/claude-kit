@@ -53,14 +53,19 @@ update_hint() {
     *) echo "git -C \"$KIT_DIR\" pull && \"$KIT_DIR/install.sh\" --update" ;;
   esac
 }
+# Hash from stdin: with a filename, GNU sha256sum prefixes "\" when the path has a backslash (Windows paths).
 if command -v sha256sum >/dev/null 2>&1; then
-  hash_file() { sha256sum "$1" | cut -c1-16; }
+  hash_file() { sha256sum <"$1" | cut -c1-16; }
 else
-  hash_file() { shasum -a 256 "$1" | cut -c1-16; }
+  hash_file() { shasum -a 256 <"$1" | cut -c1-16; }
 fi
 recorded() { # recorded <kind> <rel> -> hash from the previous manifest
   [ -f "$manifest" ] || return 0
   awk -F '\t' -v k="$1" -v p="$2" '$1 == k && $3 == p {print $2; exit}' "$manifest"
+}
+same_hash() { # same_hash <hash> <recorded> -> also accepts the legacy "\"+15 hex form (pre-1.5.0, Windows)
+  [ "$1" = "$2" ] && return 0
+  case "$2" in "\\"?*) [ "$(printf '%s' "$1" | cut -c1-15)" = "${2#?}" ] ;; *) return 1 ;; esac
 }
 meta() { [ -f "$manifest" ] && sed -n "s/^$1=//p" "$manifest" | head -n 1 || true; }
 
@@ -84,7 +89,7 @@ install_kit_file() { # <src> <rel>
   cur="$(hash_file "$dst")"
   if [ "$cur" = "$new" ]; then counts_same=$((counts_same + 1)); return; fi
   rec="$(recorded kit "$rel")"
-  if [ -n "$rec" ] && [ "$cur" = "$rec" ]; then
+  if [ -n "$rec" ] && same_hash "$cur" "$rec"; then
     put "$src" "$dst"; counts_upd=$((counts_upd + 1)); note "  update   $rel"
   else
     put "$src" "$dst.kit-new"; counts_conf=$((counts_conf + 1))
@@ -104,7 +109,7 @@ install_project_file() { # <generated src> <rel>
   if [ "$mode" = "install" ] && [ -z "$rec" ]; then
     put "$src" "$dst.kit-new"; counts_keep=$((counts_keep + 1))
     note "  keep     $rel  (exists; kit template at $rel.kit-new for reference)"
-  elif [ "$rec" != "$new" ]; then
+  elif ! same_hash "$new" "$rec"; then
     put "$src" "$dst.kit-new"; counts_keep=$((counts_keep + 1))
     note "  keep     $rel  (kit template changed; compare with $rel.kit-new)"
   else

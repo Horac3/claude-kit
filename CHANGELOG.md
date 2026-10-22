@@ -13,6 +13,15 @@
 - The manifest records the install route (`via=git|go|npm`); the installer's closing message shows the matching update command.
 - On Windows the binary finds Git Bash itself (skipping WSL's `System32\bash.exe`); `CLAUDE_KIT_BASH` overrides.
 - CI: Go vet and tests on Ubuntu, macOS and Windows (Windows non-blocking until proven stable: the first Windows run in CI; Windows was tested by hand in 1.2.1).
+  Failing tests are re-emitted as annotations, so failures are readable without the raw log.
+
+Fixes found by the new CI jobs:
+- **Hook guard on macOS without jq, python3 or node:** the last-resort JSON parser used `\|` in a basic regex, which
+  BSD sed doesn't support. The guard read nothing and let commands such as `git clean -fd` through. It now uses an
+  extended regex that both GNU and BSD sed accept.
+- **Manifest hashes on Windows (git-clone route):** GNU `sha256sum` prefixes its output with `\` when the file path
+  contains a backslash, so the manifest stored `\` plus 15 hex characters. Hashes are now read from stdin. `--update`
+  still accepts the old form, so existing Windows installs update without spurious `.kit-new` conflicts.
 
 ## 1.4.0 — 2026-10-19
 Fixes found by installing 1.2.0 into a real pnpm monorepo (13 packages, lint at the root only).

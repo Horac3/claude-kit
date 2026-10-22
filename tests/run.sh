@@ -456,6 +456,22 @@ R2="$WORK/viabad"; mkdir -p "$R2"; (cd "$R2" && git init -q && printf 'module x\
 CLAUDE_KIT_VIA='evil;rm' "$KIT/install.sh" "$R2" >/dev/null 2>&1
 grep -qx 'via=git' "$R2/.claude/kit/manifest" && ok "unknown route falls back to git" || ko "unknown route falls back to git"
 
+echo "== manifest hashes with a backslash in the kit path"
+# Windows paths reach sha256sum with backslashes, and GNU sha256sum then prefixes its output with "\".
+BK="$WORK/kit\\copy"; mkdir -p "$BK"; cp -R "$KIT/install.sh" "$KIT/VERSION" "$KIT/kit" "$KIT/stacks" "$KIT/scaffold" "$BK/"
+R3="$WORK/viabackslash"; mkdir -p "$R3"; (cd "$R3" && git init -q && printf 'module x\n\ngo 1.22\n' >go.mod)
+"$BK/install.sh" "$R3" >/dev/null 2>&1
+bad="$(awk -F '\t' '($1 == "kit" || $1 == "proj") && $2 !~ /^[0-9a-f]+$/' "$R3/.claude/kit/manifest" | head -3)"
+[ -s "$R3/.claude/kit/manifest" ] && [ -z "$bad" ] && ok "manifest hashes are plain hex" || ko "manifest hashes are plain hex" "$bad"
+# Manifests written before the fix hold "\" + the first 15 hex chars. An unmodified project must update cleanly.
+awk -F '\t' 'BEGIN { OFS = "\t" } ($1 == "kit" || $1 == "proj") { $2 = "\\" substr($2, 1, 15) } { print }' \
+  "$R3/.claude/kit/manifest" >"$WORK/legacy-manifest" && cp "$WORK/legacy-manifest" "$R3/.claude/kit/manifest"
+printf '\n# changed upstream\n' >>"$BK/kit/.claude/agents/debugger.md"
+out="$("$BK/install.sh" --update "$R3" 2>&1)"
+notcontains() { case "$1" in *"$2"*) ko "$3" "$1" ;; *) ok "$3" ;; esac; }
+notcontains "$out" "MERGE" "legacy backslash hashes update without conflicts"
+contains "$out" "update   .claude/agents/debugger.md" "legacy manifest still recognises unmodified files"
+
 if command -v node >/dev/null; then
   echo "== npm packaging (offline, fake binaries)"
   N="$WORK/npmbuild"; mkdir -p "$N/dist/b1" "$N/dist/b2"
