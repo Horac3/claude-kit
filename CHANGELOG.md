@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1 — 2026-10-22
+First npm release. 1.5.0 reached GitHub Releases and `go install`, but npm rejected it.
+- npm packages: `repository.url` now uses the GitHub repo's exact case (`Horac3/claude-kit`). npm's provenance check
+  compares it case-sensitively and rejected `horac3`.
+- Release workflow: a re-run no longer fails when the GitHub Release already has its binaries. GoReleaser then
+  builds without uploading, and the npm step continues.
+
 ## 1.5.0 — 2026-10-22
 - **Install with npm or Go.** A `claude-kit` binary carries the whole kit and the tested installer inside it:
   `npx @horac3/claude-kit init` / `update` / `pack design` / `version`, or `go install github.com/horac3/claude-kit/cmd/claude-kit@latest`,

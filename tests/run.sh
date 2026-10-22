@@ -493,6 +493,9 @@ EOF
   L="$N/out-default/claude-kit/package.json"
   node -e "const p=require('$L');const d=Object.keys(p.optionalDependencies);process.exit(p.name==='@horac3/claude-kit'&&p.bin['claude-kit']&&d.length&&d.every(n=>n.startsWith('@horac3/claude-kit-'))?0:1)" &&
     ok "launcher and platform packages share the @horac3 scope; command stays claude-kit" || ko "npm package scope" "$(cat "$L")"
+  # npm provenance compares repository.url with the GitHub repo name case-sensitively (Horac3, not horac3).
+  bad="$(grep -h '"url"' "$N"/out-default/*/package.json | grep -v 'github.com/Horac3/claude-kit')"
+  [ -z "$bad" ] && ok "every npm package's repository.url matches the GitHub repo's exact case" || ko "npm repository.url case" "$bad"
   L="$N/out/claude-kit/package.json"
   [ -x "$N/out/claude-kit-linux-x64/bin/claude-kit" ] && ok "unix binary is executable in its package" || ko "unix binary executable"
   [ -f "$N/out/claude-kit-win32-arm64/bin/claude-kit.exe" ] && ok "windows binary named .exe" || ko "windows binary named .exe"

@@ -55,12 +55,25 @@ jobs:
           go vet ./...
           go test ./...
 
+      # On a re-run (e.g. after an npm failure) the GitHub Release already holds the binaries: rebuild them locally
+      # for npm, but don't upload again (GitHub rejects duplicate asset names).
+      - name: Release already on GitHub?
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          n="$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets | length' 2>/dev/null || echo 0)"
+          if [ "${n:-0}" -gt 0 ]; then
+            echo "release $GITHUB_REF_NAME already has $n assets: building without publishing"
+            echo "skip=--skip=publish" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
-          args: release --clean
+          args: release --clean ${{ steps.existing.outputs.skip }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
