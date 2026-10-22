@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.0 — 2026-10-22
+- **Install with npm or Go.** A `claude-kit` binary carries the whole kit and the tested installer inside it:
+  `npx claude-kit init` / `update` / `pack design` / `version`, or `go install github.com/horac3/claude-kit/cmd/claude-kit@latest`,
+  or a release binary. All routes install byte-identical files (checked in CI by a Go test against `install.sh`, and
+  for npm by a packed-tarball install during development). The git-clone route is unchanged.
+- npm ships the Go binary as six per-platform optional packages (`@horac3/claude-kit-<os>-<arch>`); npm installs only
+  the matching one, with no install scripts. The launcher explains missing platforms and alternatives.
+- Releases: one `vX.Y.Z` tag (must equal `VERSION`) runs the tests, GoReleaser (Linux, macOS, Windows × amd64/arm64,
+  checksums, GitHub Release), then npm publish with provenance and a post-publish smoke test. Re-runs skip versions
+  already published.
+- The manifest records the install route (`via=git|go|npm`); the installer's closing message shows the matching update command.
+- On Windows the binary finds Git Bash itself (skipping WSL's `System32\bash.exe`); `CLAUDE_KIT_BASH` overrides.
+- CI: Go vet and tests on Ubuntu, macOS and Windows (Windows non-blocking until proven stable: the first Windows run in CI; Windows was tested by hand in 1.2.1).
+
 ## 1.4.0 — 2026-10-19
 Fixes found by installing 1.2.0 into a real pnpm monorepo (13 packages, lint at the root only).
 - **Workspaces no longer report a false green.** For each target, `commands.env` uses the root script when the root

@@ -32,7 +32,7 @@ You need:
 | Claude Code | `claude --version` | Any recent version. |
 | bash | `bash --version` | macOS and Linux have it. On Windows, use **Git Bash** or **WSL**. |
 | git | `git --version` | The project should be a git repository. |
-| Go and/or Node | `go version` / `node --version` | Whatever your project already uses. |
+| Go and/or Node | `go version` / `node --version` | Whatever your project already uses. Node 18+ also lets you install with `npx`; Go lets you install with `go install`. |
 | jq *(optional)* | `jq --version` | The hooks use jq if it's there, then fall back to python3, node, or a built-in parser. |
 | golangci-lint *(optional, Go)* | `golangci-lint --version` | Used for lint if installed; otherwise lint is a `gofmt -l` check. |
 
@@ -40,27 +40,37 @@ The kit works with **Go**, **TypeScript/JavaScript** (pnpm, npm, yarn, or bun), 
 
 ## 2. Get the kit
 
-Clone it once, somewhere outside your projects. It's a tool you install *from*, not a dependency.
+Pick whichever route suits your machine. They install exactly the same files; CI checks this.
 
-```bash
-git clone https://github.com/Horac3/claude-kit.git ~/claude-kit
-```
+| Route | Command | You need |
+|---|---|---|
+| **npm** (nothing to keep installed) | `npx claude-kit <command>` | Node 18+ |
+| **Go** | `go install github.com/horac3/claude-kit/cmd/claude-kit@latest` | Go, with `$(go env GOPATH)/bin` on your PATH |
+| **Binary** | Download your platform's archive from [Releases](https://github.com/horac3/claude-kit/releases), check it against `checksums.txt`, and put `claude-kit` on your PATH | Nothing extra |
+| **Git clone** | `git clone https://github.com/horac3/claude-kit.git ~/claude-kit` | Nothing extra |
 
-> **Windows:** clone with LF line endings so the scripts run in Git Bash. The repo's `.gitattributes`
-> handles this. If you cloned before it existed, run `git config core.autocrlf false` and clone again.
+All routes need bash to run (on Windows, Git Bash). The rest of this guide shows the `claude-kit` command.
+With npm, put `npx` in front (`npx claude-kit init`). With a git clone, use `~/claude-kit/install.sh`,
+and `--update` instead of `update`.
+
+> **Pin a version** for a team or CI: `npx claude-kit@1.5.0 init`, or `go install …/cmd/claude-kit@v1.5.0`.
+
+> **Windows and git clones:** clone with LF line endings so the scripts run in Git Bash. The repo's
+> `.gitattributes` handles this. If you cloned before it existed, run `git config core.autocrlf false` and clone again.
+> The `claude-kit` binary finds Git Bash by itself; set `CLAUDE_KIT_BASH` to point at a different `bash.exe`.
 
 ## 3. Install it into a project
 
 **Preview first.** `--dry-run` shows what would happen and writes nothing:
 
 ```bash
-~/claude-kit/install.sh --dry-run ~/code/my-project
+claude-kit init --dry-run ~/code/my-project
 ```
 
 **Then install:**
 
 ```bash
-~/claude-kit/install.sh ~/code/my-project
+claude-kit init ~/code/my-project       # or, inside the project: claude-kit init
 ```
 
 The installer works out the stack from `go.mod` / `package.json` and the package manager from your lockfile:
@@ -86,7 +96,7 @@ Options:
 | `--stack go\|ts\|both` | Auto-detection is wrong, or the repo is empty (no `go.mod` or `package.json` yet). |
 | `--frontend` | A non-TypeScript project renders UI (e.g. a Go service with HTML templates) and you want `/ui`, `ui-checker` and the frontend rule. `--update` keeps it. |
 | `--dry-run` | You want to see the plan without writing anything. |
-| `--update` | The kit is already installed and you want a newer version (see [step 12](#12-update-the-kit)). |
+| `claude-kit update` | The kit is already installed and you want a newer version (see [step 12](#12-update-the-kit)). With a git clone: `install.sh --update`. |
 
 **Already have a `CLAUDE.md` or `.claude/settings.json`?** They are **never overwritten**. The kit's
 version is written next to yours as `CLAUDE.md.kit-new` / `settings.json.kit-new` so you can merge
@@ -308,6 +318,7 @@ git add -A && git commit -m "wip"                # the script refuses to run wit
 .claude/kit/design-pack.sh                       # see the plan for the core pack
 .claude/kit/design-pack.sh core --apply          # Impeccable + Vercel web-design-guidelines
 .claude/kit/design-pack.sh motion --apply        # optional: Emil Kowalski's animation skills (subset)
+# same thing through the binary, from the project folder: claude-kit pack design core --apply
 ```
 
 Then, inside Claude Code, add Anthropic's skill: `/plugin install frontend-design@claude-plugins-official`.
@@ -425,11 +436,25 @@ Then point the kit at it in `commands.env`: `CHECK_TEST='bash .claude/project/te
 
 ## 12. Update the kit
 
+Get the newer kit, then preview and apply:
+
 ```bash
-cd ~/claude-kit && git pull                                   # get the new kit
-~/claude-kit/install.sh --update --dry-run ~/code/my-project   # preview
-~/claude-kit/install.sh --update ~/code/my-project             # apply
+# npm: npx always fetches the version you name
+npx claude-kit@latest update --dry-run ~/code/my-project
+npx claude-kit@latest update ~/code/my-project
+
+# Go / binary: install the newer binary first
+go install github.com/horac3/claude-kit/cmd/claude-kit@latest
+claude-kit update --dry-run ~/code/my-project
+claude-kit update ~/code/my-project
+
+# git clone
+git -C ~/claude-kit pull
+~/claude-kit/install.sh --update ~/code/my-project
 ```
+
+You don't need to remember which route you used: the end of every install prints the matching update
+command, and `.claude/kit/manifest` records it as `via=npm|go|git`. Check what you have with `claude-kit version`.
 
 What happens to each file:
 
