@@ -57,7 +57,7 @@ for (const a of artifacts) {
         name,
         version,
         description: `claude-kit binary for ${os}-${cpu}. Install "@horac3/claude-kit" instead; it picks this up automatically.`,
-        repository: { type: 'git', url: 'git+https://github.com/horac3/claude-kit.git' },
+        repository: { type: 'git', url: 'git+https://github.com/Horac3/claude-kit.git' },
         license: 'MIT',
         os: [os],
         cpu: [cpu],
