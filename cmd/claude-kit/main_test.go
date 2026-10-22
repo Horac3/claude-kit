@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -42,6 +43,9 @@ func TestEmbedContainsEveryKitFile(t *testing.T) {
 }
 
 func TestExtractMakesScriptsExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no execute bits; Git Bash runs the scripts regardless")
+	}
 	dst := t.TempDir()
 	if err := extract(claudekit.Files, dst); err != nil {
 		t.Fatal(err)
