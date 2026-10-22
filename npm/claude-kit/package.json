@@ -1,0 +1,15 @@
+{
+  "name": "claude-kit",
+  "version": "0.0.0-dev",
+  "description": "A drop-in Claude Code setup for Go and TypeScript projects: token-lean context, model routing, file-based handoffs, and hook-enforced safety.",
+  "keywords": ["claude", "claude-code", "ai", "agents", "golang", "typescript", "developer-tools"],
+  "homepage": "https://github.com/horac3/claude-kit#readme",
+  "bugs": "https://github.com/horac3/claude-kit/issues",
+  "repository": { "type": "git", "url": "git+https://github.com/horac3/claude-kit.git", "directory": "npm/claude-kit" },
+  "license": "MIT",
+  "author": "Horace Lwanda",
+  "bin": { "claude-kit": "bin/claude-kit.js" },
+  "files": ["bin/", "README.md", "LICENSE"],
+  "engines": { "node": ">=18" },
+  "optionalDependencies": {}
+}

@@ -20,6 +20,29 @@ jobs:
       - run: shellcheck --version
       - run: shellcheck -S warning -x install.sh tests/run.sh kit/.claude/hooks/*.sh kit/.claude/kit/*.sh stacks/ts/.claude/kit/*.sh
 
+  go:
+    # The claude-kit binary: vet, unit tests, and the integration test proving `claude-kit init` installs exactly
+    # what install.sh installs. Windows runs it through Git Bash. It's the first Windows job in CI (1.2.1 was tested by
+    # hand), so it doesn't block merges until it has proven stable.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: git config --global init.defaultBranch main
+      - run: go vet ./...
+      - run: go test ./...
+      - name: gofmt
+        if: matrix.os == 'ubuntu-latest'
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
   test:
     strategy:
       fail-fast: false
