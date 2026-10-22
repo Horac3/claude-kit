@@ -24,7 +24,10 @@ if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) {
 }
 const dist = resolve(args.dist || join(repo, 'dist'));
 const out = resolve(args.out || join(dist, 'npm'));
-const scope = args.scope || '@horac3';
+// Platform packages live in the launcher's own scope unless overridden (tests use --scope).
+const launcherName = JSON.parse(readFileSync(join(here, 'claude-kit', 'package.json'), 'utf8')).name;
+const scope = args.scope || launcherName.split('/')[0];
+if (!scope.startsWith('@')) throw new Error(`launcher package must be scoped, got ${launcherName}`);
 
 const GOOS = { linux: 'linux', darwin: 'darwin', windows: 'win32' };
 const GOARCH = { amd64: 'x64', arm64: 'arm64' };
@@ -53,7 +56,7 @@ for (const a of artifacts) {
       {
         name,
         version,
-        description: `claude-kit binary for ${os}-${cpu}. Install "claude-kit" instead; it picks this up automatically.`,
+        description: `claude-kit binary for ${os}-${cpu}. Install "@horac3/claude-kit" instead; it picks this up automatically.`,
         repository: { type: 'git', url: 'git+https://github.com/horac3/claude-kit.git' },
         license: 'MIT',
         os: [os],

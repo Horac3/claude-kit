@@ -2,7 +2,7 @@
 
 ## 1.5.0 — 2026-10-22
 - **Install with npm or Go.** A `claude-kit` binary carries the whole kit and the tested installer inside it:
-  `npx claude-kit init` / `update` / `pack design` / `version`, or `go install github.com/horac3/claude-kit/cmd/claude-kit@latest`,
+  `npx @horac3/claude-kit init` / `update` / `pack design` / `version`, or `go install github.com/horac3/claude-kit/cmd/claude-kit@latest`,
   or a release binary. All routes install byte-identical files (checked in CI by a Go test against `install.sh`, and
   for npm by a packed-tarball install during development). The git-clone route is unchanged.
 - npm ships the Go binary as six per-platform optional packages (`@horac3/claude-kit-<os>-<arch>`); npm installs only

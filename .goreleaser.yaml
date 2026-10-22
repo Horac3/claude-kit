@@ -44,5 +44,5 @@ release:
     owner: horac3
     name: claude-kit
   footer: |
-    Install: `npx claude-kit@{{ .Version }} init` · `go install github.com/horac3/claude-kit/cmd/claude-kit@{{ .Tag }}` · or download a binary below.
+    Install: `npx @horac3/claude-kit@{{ .Version }} init` · `go install github.com/horac3/claude-kit/cmd/claude-kit@{{ .Tag }}` · or download a binary below.
     What changed: see [CHANGELOG.md](https://github.com/horac3/claude-kit/blob/{{ .Tag }}/CHANGELOG.md).
