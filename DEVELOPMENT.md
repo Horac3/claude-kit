@@ -138,8 +138,12 @@ npm/build.mjs                builds the launcher + 6 platform packages from GoRe
 6. ~~Licence notices, CREDITS.md and the kit's LICENSE (`tasks/01-licensing-and-credits.md`).~~ Done in 1.3.0. Still open:
    the second video creator's credit (`TODO(credit)` in `CREDITS.md`).
 7. **Publish the package (1.5.0).** Everything is built and tested except the real publish:
-   - Create the npm account or organisation that owns the `@horac3` scope (the platform packages) and claim `claude-kit`
-     (unscoped, free on 2026-10-22). Add `NPM_TOKEN` as a repo secret, or set up npm trusted publishing for `release.yml`.
+   - Everything publishes under the npm user scope `@never9to5ive` (the maintainer's npm account): the launcher
+     `@never9to5ive/claude-kit` and six `@never9to5ive/claude-kit-<os>-<arch>` packages. Unscoped `claude-kit` is not
+     usable: npm rejects names that differ from an existing package (`claudekit`) only by punctuation.
+   - First release: a granular access token (read and write, bypass 2FA, short expiry) as the `NPM_TOKEN` repo secret.
+     Then move to trusted publishing on all seven packages and drop the token: npm removes direct publishing from
+     2FA-bypass tokens around January 2027.
    - Tag `v1.5.0` from `main` after merging. `go install …@v1.5.0` works from the tag.
    - Not yet verified: a real `npm publish` with provenance, the macOS and Windows binaries running on real machines,
      and the Windows `go test` job. The release workflow ends with an npx smoke test.

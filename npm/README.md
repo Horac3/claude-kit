@@ -4,9 +4,9 @@ A drop-in Claude Code setup for Go and TypeScript projects: a small always-loade
 delegation, file-based handoffs between conversations, and safety rules enforced by hooks.
 
 ```bash
-npx claude-kit init          # install into the current project (auto-detects go / ts / both)
-npx claude-kit@latest update # pull a newer kit into an installed project
-npx claude-kit pack design   # optional third-party design skills (dry run; add --apply)
+npx @never9to5ive/claude-kit init          # install into the current project (auto-detects go / ts / both)
+npx @never9to5ive/claude-kit@latest update # pull a newer kit into an installed project
+npx @never9to5ive/claude-kit pack design   # optional third-party design skills (dry run; add --apply)
 ```
 
 This npm package is a launcher for a prebuilt Go binary. npm installs only the binary that matches your

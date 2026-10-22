@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // claude-kit npm launcher: runs the prebuilt Go binary for this platform.
-// The binary comes from a per-platform optional dependency (e.g. @horac3/claude-kit-linux-x64),
+// The binary comes from a per-platform optional dependency (e.g. @never9to5ive/claude-kit-linux-x64),
 // so npm downloads only the one that matches this machine, with no install scripts.
 'use strict';
 

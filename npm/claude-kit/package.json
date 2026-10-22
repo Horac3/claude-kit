@@ -1,5 +1,5 @@
 {
-  "name": "claude-kit",
+  "name": "@never9to5ive/claude-kit",
   "version": "0.0.0-dev",
   "description": "A drop-in Claude Code setup for Go and TypeScript projects: token-lean context, model routing, file-based handoffs, and hook-enforced safety.",
   "keywords": ["claude", "claude-code", "ai", "agents", "golang", "typescript", "developer-tools"],
