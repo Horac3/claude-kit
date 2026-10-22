@@ -36,10 +36,11 @@ for(const k of process.argv[1].replace(/^\./,"").split(".")){d=d&&typeof d==="ob
 if(d!==undefined&&d!==null)process.stdout.write(typeof d==="string"?d:JSON.stringify(d))}catch(e){}})' "$path" 2>/dev/null
     return
   fi
-  # Last resort: first "key": "value" for the last path segment (escapes left as-is).
+  # Last resort: "key": "value" for the last path segment (escapes left as-is). Extended regex, because BSD sed
+  # (macOS) has no \| alternation in basic regex.
   local key="${path##*.}"
   printf '%s' "$HOOK_INPUT" | tr '\n' ' ' |
-    sed -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\"\(\([^\"\\\\]\|\\\\.\)*\)\".*/\1/p" | head -n 1
+    sed -E -n "s/.*\"$key\"[[:space:]]*:[[:space:]]*\"(([^\"\\\\]|\\\\.)*)\".*/\1/p" | head -n 1
 }
 
 # project_dir -> the project root

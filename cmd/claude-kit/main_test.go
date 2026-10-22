@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -138,7 +139,7 @@ func TestInitMatchesInstallSh(t *testing.T) {
 			content = strings.Replace(content, "via=git", "via=go", 1)
 		}
 		if content != other {
-			t.Errorf("content differs: %s", name)
+			t.Errorf("content differs: %s%s", name, lineDiff(content, other))
 		}
 	}
 	if !strings.Contains(b[".claude/kit/manifest"], "via=go") {
@@ -217,4 +218,22 @@ func withoutVia(env []string) []string {
 		}
 	}
 	return out
+}
+
+// lineDiff lists the lines only one side has (at most 10 each), so a CI failure says what differs.
+func lineDiff(a, b string) string {
+	only := func(x, y string) []string {
+		seen := map[string]bool{}
+		for _, l := range strings.Split(y, "\n") {
+			seen[l] = true
+		}
+		var out []string
+		for _, l := range strings.Split(x, "\n") {
+			if !seen[l] && len(out) < 10 {
+				out = append(out, l)
+			}
+		}
+		return out
+	}
+	return fmt.Sprintf("\n  install.sh only: %q\n  claude-kit only: %q", only(a, b), only(b, a))
 }
