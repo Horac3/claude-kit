@@ -446,6 +446,42 @@ out="$(printf '{"source":"startup"}' | CLAUDE_PROJECT_DIR="$E" bash .claude/hook
 contains "$out" "run /remap" "session hook surfaces stale map"
 [ -f .claude/skills/remap/SKILL.md ] && ok "remap skill installed" || ko "remap skill installed"
 
+echo "== install route recorded"
+grep -qx 'via=git' "$P/.claude/kit/manifest" && ok "clone install records via=git" || ko "clone install records via=git"
+R="$WORK/viaroute"; mkdir -p "$R"; (cd "$R" && git init -q && printf 'module x\n\ngo 1.22\n' >go.mod)
+out="$(CLAUDE_KIT_VIA=npm "$KIT/install.sh" "$R" 2>&1)"
+grep -qx 'via=npm' "$R/.claude/kit/manifest" && ok "CLAUDE_KIT_VIA=npm is recorded" || ko "CLAUDE_KIT_VIA=npm is recorded"
+contains "$out" "npx claude-kit@latest update" "update hint matches npm route"
+R2="$WORK/viabad"; mkdir -p "$R2"; (cd "$R2" && git init -q && printf 'module x\n\ngo 1.22\n' >go.mod)
+CLAUDE_KIT_VIA='evil;rm' "$KIT/install.sh" "$R2" >/dev/null 2>&1
+grep -qx 'via=git' "$R2/.claude/kit/manifest" && ok "unknown route falls back to git" || ko "unknown route falls back to git"
+
+if command -v node >/dev/null; then
+  echo "== npm packaging (offline, fake binaries)"
+  N="$WORK/npmbuild"; mkdir -p "$N/dist/b1" "$N/dist/b2"
+  printf 'fake-linux' >"$N/dist/b1/claude-kit"; printf 'fake-win' >"$N/dist/b2/claude-kit.exe"
+  cat >"$N/dist/artifacts.json" <<EOF
+[{"type":"Binary","goos":"linux","goarch":"amd64","path":"$N/dist/b1/claude-kit"},
+ {"type":"Binary","goos":"windows","goarch":"arm64","path":"$N/dist/b2/claude-kit.exe"},
+ {"type":"Archive","goos":"linux","goarch":"amd64","path":"$N/dist/x.tar.gz"}]
+EOF
+  out="$(node "$KIT/npm/build.mjs" --version 9.8.7 --dist "$N/dist" --out "$N/out" --scope @test 2>&1)"; rc=$?
+  [ $rc -eq 0 ] && ok "npm/build.mjs succeeds" || ko "npm/build.mjs succeeds" "$out"
+  L="$N/out/claude-kit/package.json"
+  node -e "const p=require('$L');process.exit(p.version==='9.8.7'&&p.optionalDependencies['@test/claude-kit-linux-x64']==='9.8.7'&&p.optionalDependencies['@test/claude-kit-win32-arm64']==='9.8.7'&&Object.keys(p.optionalDependencies).length===2?0:1)" &&
+    ok "launcher pins every platform package to the release version" || ko "launcher optionalDependencies" "$(cat "$L")"
+  node -e "const p=require('$N/out/claude-kit-win32-arm64/package.json');process.exit(p.os[0]==='win32'&&p.cpu[0]==='arm64'?0:1)" &&
+    ok "platform package restricted by os/cpu" || ko "platform package os/cpu"
+  [ -x "$N/out/claude-kit-linux-x64/bin/claude-kit" ] && ok "unix binary is executable in its package" || ko "unix binary executable"
+  [ -f "$N/out/claude-kit-win32-arm64/bin/claude-kit.exe" ] && ok "windows binary named .exe" || ko "windows binary named .exe"
+  out="$(node "$KIT/npm/build.mjs" --version not-a-version --dist "$N/dist" 2>&1)"; rc=$?
+  [ $rc -ne 0 ] && ok "build.mjs rejects a bad version" || ko "build.mjs rejects a bad version"
+  out="$(CLAUDE_KIT_BINARY=/bin/echo node "$N/out/claude-kit/bin/claude-kit.js" hello 2>&1)"
+  [ "$out" = "hello" ] && ok "launcher runs the resolved binary with arguments" || ko "launcher passes arguments" "$out"
+  out="$(node "$N/out/claude-kit/bin/claude-kit.js" version 2>&1)"; rc=$?
+  [ $rc -eq 1 ] && contains "$out" "no prebuilt binary" "launcher explains a missing platform binary" || ko "launcher missing-binary path" "$out"
+fi
+
 if [ "${KIT_TEST_TS:-0}" = 1 ] && command -v pnpm >/dev/null; then
   echo "== check runner: real TypeScript project (pnpm + vitest)"
   T="$WORK/tsproj"; mkdir -p "$T/src"; cd "$T" || exit 1; git init -q

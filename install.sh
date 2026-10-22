@@ -20,6 +20,10 @@ set -euo pipefail
 
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KIT_VERSION="$(tr -d '[:space:]' <"$KIT_DIR/VERSION")"
+# How this run was started: git (a clone of the repo), go (go install / release binary) or npm (npx claude-kit).
+# The claude-kit binary sets it; it is recorded in the manifest so the update hint matches the route.
+KIT_VIA="${CLAUDE_KIT_VIA:-git}"
+case "$KIT_VIA" in git | go | npm) ;; *) KIT_VIA=git ;; esac
 
 stack="auto" mode="install" dry=0 frontend=0 target="."
 while [ $# -gt 0 ]; do
@@ -42,6 +46,13 @@ target="$(cd "$target" && pwd)"
 manifest="$target/.claude/kit/manifest"
 
 # ---------- helpers ----------
+update_hint() {
+  case "$KIT_VIA" in
+    npm) echo "npx claude-kit@latest update" ;;
+    go) echo "go install github.com/horac3/claude-kit/cmd/claude-kit@latest && claude-kit update" ;;
+    *) echo "git -C \"$KIT_DIR\" pull && \"$KIT_DIR/install.sh\" --update" ;;
+  esac
+}
 if command -v sha256sum >/dev/null 2>&1; then
   hash_file() { sha256sum "$1" | cut -c1-16; }
 else
@@ -388,6 +399,7 @@ if [ "$dry" -eq 0 ]; then
     echo "stack=$stack"
     echo "pm=$pm"
     echo "frontend=$frontend"
+    echo "via=$KIT_VIA"
     printf '%s\n' "${NEW_MANIFEST[@]}"
   } >"$manifest"
 fi
@@ -405,5 +417,6 @@ Next:
   2. cd "$target" && claude
   3. Run /kickoff  (maps the code, fills CLAUDE.md, verifies .claude/kit/commands.env, drafts the roadmap)
   4. /clear, then /next — one roadmap step per conversation.
+Update later with: $(update_hint)
 EOF
 fi

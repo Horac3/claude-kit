@@ -1,3 +1,4 @@
 .claude/kit/logs/
 *.kit-new
 .DS_Store
+dist/
