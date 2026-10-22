@@ -7,11 +7,24 @@ A drop-in Claude Code setup for Go and TypeScript projects. It focuses on four t
 - **Clean handoffs.** One roadmap step per conversation. State lives in `docs/progress.md`, so `/clear` costs nothing and nothing is lost.
 - **Safety by hooks, not hope.** Deleting or discarding work is blocked deterministically, even in compound commands.
 
+```bash
+cd ~/code/my-project
+npx claude-kit init                               # Node/TS developers
+# or: go install github.com/horac3/claude-kit/cmd/claude-kit@latest && claude-kit init
+claude                                            # then: /kickoff
 ```
-git clone <your-remote>/claude-kit ~/claude-kit
-~/claude-kit/install.sh ~/code/my-project        # auto-detects go / ts / both
-cd ~/code/my-project && claude                    # then: /kickoff
-```
+
+The same installer ships four ways, and they install identical files (CI checks this):
+
+| Route | Install | Needs |
+|---|---|---|
+| npm | `npx claude-kit init` | Node 18+ and bash |
+| Go | `go install github.com/horac3/claude-kit/cmd/claude-kit@latest` | Go and bash |
+| Binary | download from [Releases](https://github.com/horac3/claude-kit/releases) | bash |
+| Git | `git clone https://github.com/horac3/claude-kit ~/claude-kit && ~/claude-kit/install.sh .` | bash |
+
+The `claude-kit` binary carries the kit inside it (`init`, `update`, `pack design`, `version`). On Windows,
+bash means Git Bash, which Claude Code on Windows needs anyway.
 
 **New here? Follow the step-by-step guide: [HOW_TO_USE.md](HOW_TO_USE.md).**
 Working on the kit itself? Start with [DEVELOPMENT.md](DEVELOPMENT.md).
@@ -152,10 +165,12 @@ overwrites an existing file. The projects behind the kit are credited in [CREDIT
 
 ## Updating
 
+```bash
+npx claude-kit@latest update            # npm route; add --dry-run to preview
+claude-kit update                       # Go/binary route, after installing the newer binary
+git -C ~/claude-kit pull && ~/claude-kit/install.sh --update .   # git route
 ```
-cd ~/claude-kit && git pull
-~/claude-kit/install.sh --update ~/code/my-project            # add --dry-run to preview
-```
+The manifest records which route installed the kit (`via=`), and the installer's closing hint uses it.
 
 - A kit file you **haven't modified** is updated in place.
 - A kit file you **have modified** is left alone; the new version is written next to it as `<file>.kit-new`.
@@ -189,6 +204,7 @@ next to it as `<file>.kit-new`.
 ## Requirements
 
 - bash and git. macOS, Linux, or Windows through Git Bash or WSL.
+- To install: Node 18+ (`npx`), or Go (`go install`), or neither (release binary or git clone).
 - Optional: `jq`. The hooks fall back to python3, then node, then a regex parser.
 - Go projects: `golangci-lint` is used if installed; otherwise lint falls back to a `gofmt -l` check.
   `go test -race` needs cgo and a C compiler, so the kit leaves it to CI or Docker.

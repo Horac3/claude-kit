@@ -28,13 +28,26 @@ stacks/go/.claude/           go.md rule
 stacks/ts/.claude/           typescript.md, frontend.md rules; /ui skill; ui-checker agent; shot.mjs; design-pack.sh
 scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md
 examples/tally/              fictional project showing a migrated CLAUDE.md and path-scoped rules
-tests/run.sh                 self-tests (167); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
-.github/workflows/ci.yml     shellcheck; tests on Ubuntu (+ TS) and macOS bash 3.2
+tests/run.sh                 self-tests (181); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
+go.mod, kitfs.go             Go module github.com/horac3/claude-kit; kitfs.go embeds install.sh, VERSION, kit/, stacks/, scaffold/
+cmd/claude-kit/              the CLI: init, update, pack design, version. Unpacks the embedded kit to a temp dir and runs
+                             install.sh / design-pack.sh with bash (Git Bash on Windows). main_test.go proves `init`
+                             installs exactly what install.sh installs.
+npm/claude-kit/              npm launcher package (bin/claude-kit.js runs the platform binary)
+npm/build.mjs                builds the launcher + 6 platform packages from GoReleaser's dist/artifacts.json
+.goreleaser.yaml             6 binaries (linux/darwin/windows × amd64/arm64), archives, checksums
+.github/workflows/ci.yml     shellcheck; tests on Ubuntu (+ TS) and macOS bash 3.2; Go vet/test on Ubuntu, macOS, Windows
+.github/workflows/release.yml  on tag vX.Y.Z = VERSION: tests, GoReleaser release, npm publish with provenance, smoke test
 ```
 
 `install.sh` generates `.claude/settings.json` and `.claude/kit/commands.env` per stack and package manager, in `gen_settings` and `gen_commands`.
 
 ## Invariants: do not break these
+
+0. **One installer, every route.** `install.sh` is the only install logic. The Go binary and the npm launcher run
+   it (embedded); they must never reimplement or diverge from it. `TestInitMatchesInstallSh` enforces this. Phase 2
+   (`tasks/04`) may port it to Go, but only by keeping that equivalence test green against the bash version first.
+   Never `go:embed` without the `all:` prefix: the `.claude` folders would silently drop out.
 
 1. **The installer never deletes and never overwrites user changes.**
    - Kit files are replaced only if their hash matches the manifest; otherwise the new version is written as `<file>.kit-new`.
@@ -124,7 +137,16 @@ tests/run.sh                 self-tests (167); KIT_TEST_TS=1 adds a real pnpm + 
    **`.claude/settings.local.json`**, which is gitignored. Its hooks are therefore per machine: teammates who clone the repo don't get them.
 6. ~~Licence notices, CREDITS.md and the kit's LICENSE (`tasks/01-licensing-and-credits.md`).~~ Done in 1.3.0. Still open:
    the second video creator's credit (`TODO(credit)` in `CREDITS.md`).
-7. **Maybe:** a `--stack` value for other languages (Python, Kotlin) with their own rule files and `commands.env` defaults.
+7. **Publish the package (1.5.0).** Everything is built and tested except the real publish:
+   - Create the npm account or organisation that owns the `@horac3` scope (the platform packages) and claim `claude-kit`
+     (unscoped, free on 2026-10-22). Add `NPM_TOKEN` as a repo secret, or set up npm trusted publishing for `release.yml`.
+   - Tag `v1.5.0` from `main` after merging. `go install …@v1.5.0` works from the tag.
+   - Not yet verified: a real `npm publish` with provenance, the macOS and Windows binaries running on real machines,
+     and the Windows `go test` job. The release workflow ends with an npx smoke test.
+8. **Package phase 2: port `install.sh` to Go** (`tasks/04-go-installer.md`). Removes the bash requirement for installing.
+9. **Skills uplift** (`tasks/05-skills-uplift.md`): NestJS rule, backend rules, reviewer upgrade, TypeScript additions,
+   `/kickoff` spec mining, `/decide` pre-mortem, and the `pack go` / `pack payments` packs.
+10. **Maybe:** a `--stack` value for other languages (Python, Kotlin) with their own rule files and `commands.env` defaults.
 
 ## How to work on the kit
 

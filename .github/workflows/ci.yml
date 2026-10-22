@@ -20,6 +20,38 @@ jobs:
       - run: shellcheck --version
       - run: shellcheck -S warning -x install.sh tests/run.sh kit/.claude/hooks/*.sh kit/.claude/kit/*.sh stacks/ts/.claude/kit/*.sh
 
+  go:
+    # The claude-kit binary: vet, unit tests, and the integration test proving `claude-kit init` installs exactly
+    # what install.sh installs. Windows runs it through Git Bash. It's the first Windows job in CI (1.2.1 was tested by
+    # hand), so it doesn't block merges until it has proven stable.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: git config --global init.defaultBranch main
+      - run: go vet ./...
+      - name: go test
+        shell: bash
+        run: |
+          set -o pipefail
+          go test ./... 2>&1 | tee go-test.log
+      - name: Report failing Go tests as annotations
+        if: failure()
+        shell: bash
+        run: |
+          grep -E -- '--- FAIL|_test\.go:[0-9]+|panic:|cannot|error| only: ' go-test.log | head -40 | while IFS= read -r line; do echo "::error title=go test::$line"; done
+      - name: gofmt
+        if: matrix.os == 'ubuntu-latest'
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
   test:
     strategy:
       fail-fast: false
@@ -53,4 +85,11 @@ jobs:
           if [ "${{ matrix.os }}" = macos-latest ]; then export PATH="/bin:$PATH"; fi
           bash --version | head -1
           git config --global init.defaultBranch main
-          ${{ matrix.bash }} tests/run.sh
+          set -o pipefail
+          ${{ matrix.bash }} tests/run.sh 2>&1 | tee tests-run.log
+      - name: Report failing tests as annotations
+        if: failure()
+        run: |
+          # Annotations show in the PR checks tab and are readable through the API (raw logs often aren't).
+          grep -E '^  FAIL ' tests-run.log | head -40 | while IFS= read -r line; do echo "::error title=tests/run.sh::${line#  FAIL }"; done
+          grep -A3 -E '^  FAIL ' tests-run.log | grep -E '^       ' | head -30 | while IFS= read -r line; do echo "::warning title=tests/run.sh detail::$line"; done

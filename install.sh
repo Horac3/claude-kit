@@ -20,6 +20,10 @@ set -euo pipefail
 
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KIT_VERSION="$(tr -d '[:space:]' <"$KIT_DIR/VERSION")"
+# How this run was started: git (a clone of the repo), go (go install / release binary) or npm (npx claude-kit).
+# The claude-kit binary sets it; it is recorded in the manifest so the update hint matches the route.
+KIT_VIA="${CLAUDE_KIT_VIA:-git}"
+case "$KIT_VIA" in git | go | npm) ;; *) KIT_VIA=git ;; esac
 
 stack="auto" mode="install" dry=0 frontend=0 target="."
 while [ $# -gt 0 ]; do
@@ -42,14 +46,26 @@ target="$(cd "$target" && pwd)"
 manifest="$target/.claude/kit/manifest"
 
 # ---------- helpers ----------
+update_hint() {
+  case "$KIT_VIA" in
+    npm) echo "npx claude-kit@latest update" ;;
+    go) echo "go install github.com/horac3/claude-kit/cmd/claude-kit@latest && claude-kit update" ;;
+    *) echo "git -C \"$KIT_DIR\" pull && \"$KIT_DIR/install.sh\" --update" ;;
+  esac
+}
+# Hash from stdin: with a filename, GNU sha256sum prefixes "\" when the path has a backslash (Windows paths).
 if command -v sha256sum >/dev/null 2>&1; then
-  hash_file() { sha256sum "$1" | cut -c1-16; }
+  hash_file() { sha256sum <"$1" | cut -c1-16; }
 else
-  hash_file() { shasum -a 256 "$1" | cut -c1-16; }
+  hash_file() { shasum -a 256 <"$1" | cut -c1-16; }
 fi
 recorded() { # recorded <kind> <rel> -> hash from the previous manifest
   [ -f "$manifest" ] || return 0
   awk -F '\t' -v k="$1" -v p="$2" '$1 == k && $3 == p {print $2; exit}' "$manifest"
+}
+same_hash() { # same_hash <hash> <recorded> -> also accepts the legacy "\"+15 hex form (pre-1.5.0, Windows)
+  [ "$1" = "$2" ] && return 0
+  case "$2" in "\\"?*) [ "$(printf '%s' "$1" | cut -c1-15)" = "${2#?}" ] ;; *) return 1 ;; esac
 }
 meta() { [ -f "$manifest" ] && sed -n "s/^$1=//p" "$manifest" | head -n 1 || true; }
 
@@ -73,7 +89,7 @@ install_kit_file() { # <src> <rel>
   cur="$(hash_file "$dst")"
   if [ "$cur" = "$new" ]; then counts_same=$((counts_same + 1)); return; fi
   rec="$(recorded kit "$rel")"
-  if [ -n "$rec" ] && [ "$cur" = "$rec" ]; then
+  if [ -n "$rec" ] && same_hash "$cur" "$rec"; then
     put "$src" "$dst"; counts_upd=$((counts_upd + 1)); note "  update   $rel"
   else
     put "$src" "$dst.kit-new"; counts_conf=$((counts_conf + 1))
@@ -93,7 +109,7 @@ install_project_file() { # <generated src> <rel>
   if [ "$mode" = "install" ] && [ -z "$rec" ]; then
     put "$src" "$dst.kit-new"; counts_keep=$((counts_keep + 1))
     note "  keep     $rel  (exists; kit template at $rel.kit-new for reference)"
-  elif [ "$rec" != "$new" ]; then
+  elif ! same_hash "$new" "$rec"; then
     put "$src" "$dst.kit-new"; counts_keep=$((counts_keep + 1))
     note "  keep     $rel  (kit template changed; compare with $rel.kit-new)"
   else
@@ -388,6 +404,7 @@ if [ "$dry" -eq 0 ]; then
     echo "stack=$stack"
     echo "pm=$pm"
     echo "frontend=$frontend"
+    echo "via=$KIT_VIA"
     printf '%s\n' "${NEW_MANIFEST[@]}"
   } >"$manifest"
 fi
@@ -405,5 +422,6 @@ Next:
   2. cd "$target" && claude
   3. Run /kickoff  (maps the code, fills CLAUDE.md, verifies .claude/kit/commands.env, drafts the roadmap)
   4. /clear, then /next — one roadmap step per conversation.
+Update later with: $(update_hint)
 EOF
 fi
