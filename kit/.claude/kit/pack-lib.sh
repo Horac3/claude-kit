@@ -11,8 +11,9 @@ SKILLS="npx -y skills@latest add"
 FLAGS="-a claude-code -y --copy"
 
 # Empty arrays are expanded as ${a[@]+"${a[@]}"}: plain "${a[@]}" is an unbound-variable error under set -u in bash < 4.4.
-declare -a CMDS=() REPOS=() MANUAL=() NOTES=()
-add() { CMDS+=("$1"); REPOS+=("${2:-}"); }   # add <command> [owner/repo of the skills it copies | mcp:<name>]
+declare -a CMDS=() REPOS=() LICPATHS=() MANUAL=() NOTES=()
+# add <command> [owner/repo of the skills it copies | mcp:<name>] [licence path, when upstream keeps it in the skill folder]
+add() { CMDS+=("$1"); REPOS+=("${2:-}"); LICPATHS+=("${3:-}"); }
 manual() { MANUAL+=("$1"); }
 note() { NOTES+=("$1"); }
 
@@ -56,20 +57,20 @@ readme_licence() { # readme_licence <owner/repo>: SPDX id declared under "## Lic
 
 entry() { printf '%s\t%s <!-- %s -->\n' "$1" "$2" "$1" >>"$ENTRIES"; }   # entry <key> <markdown line>
 
-fetch_licence() { # fetch_licence <owner/repo> <dest>: writes dest only if it does not exist; 0 if dest exists afterwards
+fetch_licence() { # fetch_licence <owner/repo> <dest> [path]: writes dest only if it does not exist; 0 if dest exists afterwards
   local tmp f
   [ -f "$2" ] && return 0   # already there (e.g. the installer brought one): never overwrite it
   tmp="$(mktemp)"
-  for f in LICENSE LICENSE.md LICENSE.txt; do
+  for f in ${3:+"$3"} LICENSE LICENSE.md LICENSE.txt; do
     if fetch_upstream "$1" "$f" "$tmp" && [ -s "$tmp" ]; then cp "$tmp" "$2"; break; fi
   done
   rm -f "$tmp"
   [ -f "$2" ]
 }
 
-license_skill() { # license_skill <skill> <owner/repo>; returns 1 if no licence could be found
+license_skill() { # license_skill <skill> <owner/repo> [licence path]; returns 1 if no licence could be found
   local name="$1" repo="$2" dir=".claude/skills/$1" url="https://github.com/$2" tmp got="" spdx cr
-  fetch_licence "$repo" "$dir/LICENSE" && got="$dir/LICENSE"
+  fetch_licence "$repo" "$dir/LICENSE" "${3:-}" && got="$dir/LICENSE"
   if [ -z "$got" ]; then
     if spdx="$(readme_licence "$repo")"; then
       echo "  note: $repo has no LICENSE file; its README declares $spdx. Recorded in $NOTICES, no LICENSE written."
@@ -133,8 +134,8 @@ render_block() {
   local skills agents runtime
   skills="$(merged skill:)"; agents="$(merged agent:)"; runtime="$(merged mcp:)"
   printf '%s\n' "$START"
-  printf '## Third-party skills and agents (maintained by `.claude/kit/design-pack.sh`)\n\n'
-  printf 'Copied into this repository from their upstream sources by the claude-kit design pack. Each skill folder carries\n'
+  printf '## Third-party skills and agents (maintained by claude-kit packs: `.claude/kit/*-pack.sh`)\n\n'
+  printf 'Copied into this repository from their upstream sources by the claude-kit packs. Each skill folder carries\n'
   printf 'its upstream `LICENSE` (and `NOTICE` where one exists), and each agent names its licence copy; keep them when you\n'
   printf 'commit or move these files.\n\n'
   printf '%s\n\n' "${skills:-- None yet.}"
@@ -143,6 +144,8 @@ render_block() {
   printf '### Never commit\n\n'
   printf "%s\n" "- Anthropic's \`frontend-design\` plugin is proprietary (Anthropic Commercial Terms). Each user installs it with"
   printf '%s\n' "  \`/plugin install frontend-design@claude-plugins-official\`; never copy its files into this repository."
+  printf "%s\n" "- Anthropic's document skills (\`docx\`, \`xlsx\`, \`pptx\`, \`pdf\`) are source-available under Anthropic's own terms."
+  printf '%s\n' "  Each user installs them with \`/plugin install document-skills@anthropic-agent-skills\`; never copy them here."
   printf '%s' "$END"
 }
 
@@ -208,7 +211,7 @@ ENTRIES="$(mktemp)"; trap 'rm -f "$ENTRIES"' EXIT
 existing_entries >"$ENTRIES"
 i=0
 while [ $i -lt ${#CMDS[@]} ]; do
-  c="${CMDS[$i]}" repo="${REPOS[$i]}"; i=$((i + 1))
+  c="${CMDS[$i]}" repo="${REPOS[$i]}" licpath="${LICPATHS[$i]}"; i=$((i + 1))
   before="$(skill_dirs)" abefore="$(agent_files)"
   echo "→ $c"
   bash -c "$c"; st=$?
@@ -220,7 +223,7 @@ while [ $i -lt ${#CMDS[@]} ]; do
       lic=""
       while IFS= read -r s; do
         [ -n "$s" ] || continue
-        license_skill "$s" "$repo" || missing=1
+        license_skill "$s" "$repo" "$licpath" || missing=1
         if [ -z "$lic" ] && [ -f ".claude/skills/$s/LICENSE" ]; then lic=".claude/skills/$s/LICENSE"; fi
       done <<EOF
 $(added "$before" "$(skill_dirs)")

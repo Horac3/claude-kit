@@ -237,3 +237,29 @@ func lineDiff(a, b string) string {
 	}
 	return fmt.Sprintf("\n  install.sh only: %q\n  claude-kit only: %q", only(a, b), only(b, a))
 }
+
+// pack data runs the embedded data-pack.sh, which finds the shared pack library in the unpacked kit.
+func TestPackDataRunsFromTheBinary(t *testing.T) {
+	if _, err := findBash(); err != nil {
+		t.Skip("bash not available: ", err)
+	}
+	dir := t.TempDir()
+	prev, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prev) })
+	var out bytes.Buffer
+	if code := run([]string{"pack", "data", "--list"}, &out, &out); code != 0 {
+		t.Errorf("pack data --list: exit %d, want 0", code)
+	}
+	if code := run([]string{"pack", "data", "core"}, &out, &out); code != 0 {
+		t.Errorf("pack data core (dry run): exit %d, want 0", code)
+	}
+	if code := run([]string{"pack", "data", "nope"}, &out, &out); code != 2 {
+		t.Errorf("pack data nope: exit %d, want 2", code)
+	}
+}

@@ -576,6 +576,65 @@ grep -qx 'stack=py' .claude/kit/manifest && ok "empty repo with --stack py recor
 cd "$P" || exit 1
 grep -qx 'stack=go' .claude/kit/manifest && ok "go-only manifest still records stack=go" || ko "go manifest unchanged"
 
+echo "== installer: data layer"
+DS="$WORK/dsproj"; mkdir -p "$DS/notebooks"; cd "$DS" || exit 1; git init -q
+printf 'pandas==2.2.3\nscikit-learn==1.5.2\n' >requirements.txt
+out="$("$KIT/install.sh" "$DS" 2>&1)"
+contains "$out" "+ data" "pandas in requirements turns on the data layer"
+for f in .claude/rules/kit/data-science.md .claude/skills/assumptions/SKILL.md .claude/kit/data-pack.sh docs/data.md; do
+  [ -f "$f" ] && ok "data layer installs $f" || ko "data layer installs $f" "$out"
+done
+grep -qx 'data=1' .claude/kit/manifest && ok "manifest records data=1" || ko "manifest records data=1"
+grep -qF 'Bash(.claude/kit/data-pack.sh --list)' .claude/settings.json && ok "data layer allows listing the data pack" || ko "data pack permission"
+grep -q '"\*\*/\*\.ipynb"' .claude/rules/kit/data-science.md && ok "data rule loads for notebooks" || ko "data rule paths"
+out="$("$KIT/install.sh" --update "$DS" 2>&1)"
+[ -f .claude/skills/assumptions/SKILL.md ] && ! printf '%s' "$out" | grep -q "obsolete" && grep -qx 'data=1' .claude/kit/manifest &&
+  ok "--update keeps the data layer" || ko "--update keeps the data layer" "$out"
+NB="$WORK/nbonly"; mkdir -p "$NB/analysis"; cd "$NB" || exit 1; git init -q
+printf '[project]\nname = "x"\n' >pyproject.toml; echo '{"cells":[]}' >analysis/eda.ipynb
+"$KIT/install.sh" "$NB" >/dev/null 2>&1
+grep -qx 'data=1' .claude/kit/manifest && ok "a notebook in the repo turns on the data layer" || ko "notebook detection"
+cd "$Y" || exit 1
+! grep -q '^data=1' .claude/kit/manifest && [ ! -f .claude/skills/assumptions/SKILL.md ] &&
+  ok "plain python project gets no data layer" || ko "no data layer without data signals"
+DG="$WORK/godata"; mkdir -p "$DG"; cd "$DG" || exit 1; git init -q
+printf 'module example.com/etl\n\ngo 1.22\n' >go.mod
+out="$("$KIT/install.sh" --data "$DG" 2>&1)"
+[ -f .claude/rules/kit/data-science.md ] && [ ! -f .claude/rules/kit/python.md ] &&
+  ok "--data adds the data layer to a go project without the python rule" || ko "--data on go" "$out"
+
+echo "== data pack"
+cd "$DS" || exit 1
+git add -A >/dev/null && git -c user.email=t@t -c user.name=t commit -qm init
+out="$(.claude/kit/data-pack.sh 2>&1)"; rc=$?
+[ $rc -eq 0 ] && ok "data pack dry run exits 0" || ko "data pack dry run exits 0" "$out"
+contains "$out" "anthropics/knowledge-work-plugins --skill explore-data statistical-analysis validate-data sql-queries data-visualization data-context-extractor" "core pack plans Anthropic's data skills"
+contains "$out" "Nothing installed" "data pack is a dry run by default"
+out="$(.claude/kit/data-pack.sh dbt duckdb 2>&1)"; rc=$?
+[ $rc -eq 0 ] && contains "$out" "no dbt_project.yml" "dbt pack skipped without a dbt project" || ko "dbt skip" "$out"
+contains "$out" "duckdb is not a dependency" "duckdb pack skipped without duckdb"
+DB="$WORK/dbtproj"; mkdir -p "$DB/.claude/kit"; : >"$DB/dbt_project.yml"; printf 'duckdb==1.1.3\n' >"$DB/requirements.txt"
+out="$(CLAUDE_PROJECT_DIR="$DB" .claude/kit/data-pack.sh dbt duckdb 2>&1)"
+contains "$out" "dbt-labs/dbt-agent-skills --skill using-dbt-for-analytics-engineering" "dbt pack planned when dbt_project.yml exists"
+contains "$out" "motherduckdb/agent-skills --skill motherduck-duckdb-sql" "duckdb pack planned when duckdb is a dependency"
+out="$(.claude/kit/data-pack.sh --list 2>&1)"
+contains "$out" "notebooks" "--list describes the packs"
+expect_exit 2 "data pack rejects an unknown pack" .claude/kit/data-pack.sh nope
+FX2="$WORK/licfx2"
+mkdir -p "$FX2/anthropics__knowledge-work-plugins" "$FX2/openai__skills/skills/.curated/jupyter-notebook"
+printf '                                 Apache License\n                           Version 2.0, January 2004\n' >"$FX2/anthropics__knowledge-work-plugins/LICENSE"
+printf '                                 Apache License\n                           Version 2.0, January 2004\n' >"$FX2/openai__skills/skills/.curated/jupyter-notebook/LICENSE.txt"
+dsp() { PATH="$FB:$PATH" CLAUDE_PROJECT_DIR="$DS" KIT_LICENSE_FIXTURES="$FX2" .claude/kit/data-pack.sh "$@" 2>&1; }
+out="$(dsp core notebooks --apply)"; rc=$?
+[ $rc -eq 0 ] && ok "core + notebooks --apply exits 0 with all licences fetched" || ko "data pack --apply" "$out"
+grep -q "Apache License" .claude/skills/explore-data/LICENSE 2>/dev/null && ok "Anthropic data skill gets its LICENSE" || ko "explore-data LICENSE" "$out"
+grep -q "Apache License" .claude/skills/jupyter-notebook/LICENSE 2>/dev/null &&
+  ok "a licence kept inside the skill folder upstream is fetched from there" || ko "jupyter-notebook LICENSE from skill path" "$out"
+TPN2="$DS/THIRD_PARTY_NOTICES.md"
+grep "<!-- skill:jupyter-notebook -->" "$TPN2" | grep -q "Apache-2.0" && ok "notices list the notebook skill as Apache-2.0" || ko "notebook notice" "$(cat "$TPN2" 2>/dev/null)"
+grep -q "maintained by claude-kit packs" "$TPN2" && grep -q "document-skills" "$TPN2" &&
+  ok "notices header is shared by all packs and names the document skills plugin" || ko "shared notices header" "$(cat "$TPN2" 2>/dev/null)"
+
 if [ "${KIT_TEST_TS:-0}" = 1 ] && command -v pnpm >/dev/null; then
   echo "== check runner: real TypeScript project (pnpm + vitest)"
   T="$WORK/tsproj"; mkdir -p "$T/src"; cd "$T" || exit 1; git init -q

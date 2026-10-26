@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # claude-kit installer and updater.
 #
-#   ./install.sh [--stack go|ts|py|both|auto] [--frontend] [--dry-run] [TARGET_DIR]   first install (default: .)
+#   ./install.sh [--stack go|ts|py|both|auto] [--frontend] [--data] [--dry-run] [TARGET_DIR]   first install (default: .)
 #      --stack takes one stack or several, comma-separated (go,py). both is go,ts.
-#   ./install.sh --update [--frontend] [--dry-run] [TARGET_DIR]                    pull a newer kit into a project
+#   ./install.sh --update [--frontend] [--data] [--dry-run] [TARGET_DIR]                    pull a newer kit into a project
 #
 # --frontend adds the frontend layer (frontend rule, /ui, ui-checker, shot.mjs, design-pack.sh) to any stack, e.g. a
 # Go service rendering HTML templates. ts and both stacks always have it. It is recorded, so --update keeps it.
+# --data adds the data-science layer (data rule, /assumptions, data-pack.sh, docs/data.md). Python projects get it
+# automatically when they use a data library (pandas, polars, scikit-learn, …), hold a notebook, or use dbt.
 #
 # Two kinds of files:
 #   kit files      (.claude/skills, agents, hooks, rules/kit, kit/*.sh) belong to the kit. On --update they are
@@ -26,7 +28,7 @@ KIT_VERSION="$(tr -d '[:space:]' <"$KIT_DIR/VERSION")"
 KIT_VIA="${CLAUDE_KIT_VIA:-git}"
 case "$KIT_VIA" in git | go | npm) ;; *) KIT_VIA=git ;; esac
 
-stack="auto" mode="install" dry=0 frontend=0 target="."
+stack="auto" mode="install" dry=0 frontend=0 data=0 target="."
 while [ $# -gt 0 ]; do
   case "$1" in
     --stack) stack="${2:-}"; shift 2 ;;
@@ -34,7 +36,8 @@ while [ $# -gt 0 ]; do
     --update) mode="update"; shift ;;
     --dry-run) dry=1; shift ;;
     --frontend) frontend=1; shift ;;
-    -h | --help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --data) data=1; shift ;;
+    -h | --help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) target="$1"; shift ;;
   esac
@@ -174,6 +177,16 @@ fi
 [ "$mode" = "update" ] && [ -n "$(meta pm)" ] && pm="$(meta pm)"
 [ "$mode" = "update" ] && [ "$(meta frontend)" = 1 ] && frontend=1
 has_stack ts && frontend=1   # stacks with TypeScript always get the frontend layer
+[ "$mode" = "update" ] && [ "$(meta data)" = 1 ] && data=1
+# Python projects that do data work get the data layer: a data library, a notebook, or a dbt project.
+if [ "$mode" = "install" ] && has_stack py && [ "$data" -eq 0 ]; then
+  for lib in pandas polars numpy scipy scikit-learn sklearn statsmodels duckdb pyspark dbt-core jupyter jupyterlab \
+    matplotlib seaborn plotly xgboost lightgbm torch tensorflow; do
+    py_deps "$lib" && { data=1; break; }
+  done
+  if [ "$data" -eq 0 ] && [ -n "$(find "$target" -maxdepth 3 \( -name .git -o -name node_modules -o -name .venv -o -name venv \) -prune \
+    -o \( -name '*.ipynb' -o -name dbt_project.yml \) -print 2>/dev/null | head -1)" ]; then data=1; fi
+fi
 
 # The frontend part of the TypeScript stack, installable on its own with --frontend.
 is_frontend_file() {
@@ -340,6 +353,9 @@ gen_settings() {
       "Bash(.claude/kit/design-pack.sh)" "Bash(.claude/kit/design-pack.sh --list)")
     has_stack ts || ask+=("Bash(npx *)")
   fi
+  if [ "$data" -eq 1 ]; then
+    allow+=("Bash(.claude/kit/data-pack.sh)" "Bash(.claude/kit/data-pack.sh --list)")
+  fi
   if has_stack py; then
     allow+=("Bash($py_x pytest *)" "Bash($py_x ruff check *)" "Bash($py_x ruff format --check *)"
       "Bash($py_x mypy *)" "Bash($py_x pyright *)" "Bash(python --version)" "Bash(python3 --version)")
@@ -393,7 +409,7 @@ EOF
 }
 
 # ---------- run ----------
-echo "claude-kit $KIT_VERSION → $target  (mode: $mode, stack: $stack$(has_stack ts && printf ', pm: %s' "$pm")$(! has_stack ts && [ "$frontend" -eq 1 ] && printf ' + frontend'))"
+echo "claude-kit $KIT_VERSION → $target  (mode: $mode, stack: $stack$(has_stack ts && printf ', pm: %s' "$pm")$(! has_stack ts && [ "$frontend" -eq 1 ] && printf ' + frontend')$([ "$data" -eq 1 ] && printf ' + data'))"
 [ "$dry" -eq 1 ] && echo "(dry run: nothing will be written)"
 if [ "$mode" = "update" ] && [ ! -f "$manifest" ]; then
   echo "No manifest at .claude/kit/manifest: this looks like a first install. Run without --update." >&2
@@ -411,6 +427,11 @@ for s in go ts py; do
     done < <(find "$KIT_DIR/stacks/$s" -type f -print0 | sort -z)
   fi
 done
+if [ "$data" -eq 1 ]; then
+  while IFS= read -r -d '' f; do
+    install_kit_file "$f" "${f#"$KIT_DIR/stacks/data/"}"
+  done < <(find "$KIT_DIR/stacks/data" -type f -print0 | sort -z)
+fi
 if ! has_stack ts && [ "$frontend" -eq 1 ]; then
   while IFS= read -r -d '' f; do
     rel="${f#"$KIT_DIR/stacks/ts/"}"
@@ -422,6 +443,7 @@ fi
 for f in CLAUDE.md docs/progress.md docs/decisions.md docs/requirements.md; do
   install_project_file "$KIT_DIR/scaffold/$f" "$f"
 done
+[ "$data" -eq 1 ] && install_project_file "$KIT_DIR/scaffold/docs/data.md" "docs/data.md"
 gen_settings >"$tmp/settings.json";   install_project_file "$tmp/settings.json" ".claude/settings.json"
 gen_commands >"$tmp/commands.env";    install_project_file "$tmp/commands.env" ".claude/kit/commands.env"
 
@@ -465,6 +487,7 @@ if [ "$dry" -eq 0 ]; then
     echo "stack=$stack"
     echo "pm=$pm"
     echo "frontend=$frontend"
+    echo "data=$data"
     echo "via=$KIT_VIA"
     printf '%s\n' "${NEW_MANIFEST[@]}"
   } >"$manifest"
