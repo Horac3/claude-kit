@@ -1,6 +1,6 @@
 # claude-kit
 
-A drop-in Claude Code setup for Go and TypeScript projects. It focuses on four things:
+A drop-in Claude Code setup for Go, TypeScript and Python projects, including data science. It focuses on four things:
 
 - **Token economy.** A small always-loaded context, rules that load only when relevant files are touched, and test output filtered before Claude sees it.
 - **Model routing.** Opus plans, Sonnet builds, and Haiku runs checks. Escalation happens through subagents, never by switching the main model mid-conversation.
@@ -23,7 +23,7 @@ The same installer ships four ways, and they install identical files (CI checks 
 | Binary | download from [Releases](https://github.com/horac3/claude-kit/releases) | bash |
 | Git | `git clone https://github.com/horac3/claude-kit ~/claude-kit && ~/claude-kit/install.sh .` | bash |
 
-The `claude-kit` binary carries the kit inside it (`init`, `update`, `pack design`, `version`). On Windows,
+The `claude-kit` binary carries the kit inside it (`init`, `update`, `pack design`, `pack data`, `version`). On Windows,
 bash means Git Bash, which Claude Code on Windows needs anyway.
 
 **New here? Follow the step-by-step guide: [HOW_TO_USE.md](HOW_TO_USE.md).**
@@ -98,7 +98,8 @@ docs/progress.md                   project  — roadmap · Current step · Hando
 docs/decisions.md                  project  — append-only ADR log
 docs/requirements.md               project  — FR-AREA-NN template
 .claude/settings.json              project  — opusplan, permissions, hooks, status line (per stack)
-.claude/kit/commands.env           project  — your typecheck/lint/test commands (per stack, per package manager)
+.claude/kit/commands.env           project  — your typecheck/lint/test commands (per stack, per package manager or Python runner)
+docs/data.md                       project  — data sources, grain, definitions, gotchas, privacy (data layer)
 .claude/kit/check.sh               kit      — filtered check runner
 .claude/kit/statusline.sh          kit
 .claude/kit/context.sh             kit      — layout, existing docs/rules, git history, drift (used by /kickoff, /remap, the session hook)
@@ -110,12 +111,16 @@ docs/requirements.md               project  — FR-AREA-NN template
 .claude/skills/kickoff/existing.md                                                  kit  — loaded only for existing codebases
 .claude/agents/{test-runner,reviewer,researcher,debugger}.md                        kit
 .claude/skills/ui/SKILL.md · agents/ui-checker.md · kit/shot.mjs · kit/design-pack.sh   kit  — ts and both stacks, or any stack with --frontend
+.claude/skills/assumptions/SKILL.md · kit/data-pack.sh                              kit  — data layer (see below)
+.claude/kit/pack-lib.sh                                                             kit  — shared by the optional packs
 .claude/rules/kit/working-rules.md   always     safety, working loop, test rules
 .claude/rules/kit/model-routing.md   always     the table above + token rules
 .claude/rules/kit/hexagonal.md       on demand  **/domain/**, **/ports/**, **/adapters/**, **/core/**
 .claude/rules/kit/docker.md          on demand  Dockerfiles, compose files (nginx-proxy pattern; see Opinionated defaults)
 .claude/rules/kit/go.md              on demand  **/*.go            (go and both stacks)
 .claude/rules/kit/typescript.md      on demand  **/*.ts(x), package.json, tsconfig   (ts and both stacks)
+.claude/rules/kit/python.md          on demand  **/*.py, pyproject.toml, requirements*.txt, conftest.py   (py stack)
+.claude/rules/kit/data-science.md    on demand  **/*.ipynb, notebooks/, analysis/, *.sql, dbt, models/, data/   (data layer)
 .claude/rules/kit/frontend.md        on demand  **/*.{tsx,jsx,vue,svelte,css,scss,html,tmpl,gohtml,templ}  (ts and both stacks, or --frontend)
 ```
 
@@ -163,6 +168,48 @@ add hooks to `.claude/settings.local.json` (per machine, gitignored), which the 
 `LICENSE` (and `NOTICE`) next to it and lists them in `THIRD_PARTY_NOTICES.md`; commit those with the skills. It never
 overwrites an existing file. The projects behind the kit are credited in [CREDITS.md](CREDITS.md).
 
+## Python and data science
+
+**Python** is a stack like Go and TypeScript. It's detected from `pyproject.toml`, `setup.py`/`setup.cfg`,
+`requirements*.txt`, `Pipfile` or `environment.yml`. Stacks combine, so a Go service with a Python model folder installs
+as `go,py`; force it with `--stack go,py`. Commands run through the runner your lockfile implies (`uv run`, `poetry run`,
+`pdm run`, `pipenv run`, else `python -m`). pytest, ruff and mypy or pyright are wired only when the project configures or
+depends on them, so a missing tool shows `SKIP` instead of a false failure.
+
+**The data layer** is added with `--data`, and automatically for Python projects that use a data library (pandas, polars,
+scikit-learn, DuckDB, …), hold a notebook, or have a dbt project. It brings:
+
+- `data-science.md`, a rule that loads only for notebooks, SQL, dbt models and data folders. It covers: read the data
+  context first, look before computing, reconcile row counts after every join, never drop or impute silently, baselines
+  and leakage checks for models, notebooks that run top to bottom, and no personal data in the conversation.
+- `docs/data.md`, where the data context lives: sources and their grain, definitions, gotchas, privacy, output conventions.
+- `/assumptions`, which audits an analysis in a fresh, read-only Opus context before you share it and returns a table of
+  unverified assumptions with a verdict. A second pair of eyes that didn't write the analysis catches what the author misses.
+
+**Data pack (optional).** Like the design pack, `data-pack.sh` installs curated third-party skills from upstream, writes
+each one's licence next to it, and lists them in `THIRD_PARTY_NOTICES.md`.
+
+```bash
+.claude/kit/data-pack.sh                      # show the plan for the core pack (installs nothing)
+.claude/kit/data-pack.sh core notebooks --apply
+.claude/kit/data-pack.sh --list               # core, eda, notebooks, ml, dbt, duckdb
+claude-kit pack data core                     # the same, from the binary
+```
+
+| Skill | Pack | Why it's in |
+|---|---|---|
+| [Anthropic data skills](https://github.com/anthropics/knowledge-work-plugins) `explore-data`, `statistical-analysis`, `validate-data`, `sql-queries`, `data-visualization`, `data-context-extractor` | core | Profiling, statistics, SQL across warehouse dialects, charts, a pre-share QA pass, and a skill that turns your team's data knowledge into a project skill. Apache-2.0. |
+| [K-Dense](https://github.com/K-Dense-AI/scientific-agent-skills) `exploratory-data-analysis`, `scientific-visualization` | eda | Local EDA reports with missingness and leakage audits; publication-quality, accessible figures. MIT. Overlaps with `explore-data`, so it's opt-in. |
+| [OpenAI](https://github.com/openai/skills) `jupyter-notebook` | notebooks | Notebook templates and a helper that writes clean `.ipynb` files instead of hand-editing JSON. Apache-2.0. |
+| [wshobson](https://github.com/wshobson/agents) `ml-pipeline-workflow`, K-Dense `shap` | ml | MLOps pipeline structure, and explaining model predictions. MIT. |
+| [dbt Labs](https://github.com/dbt-labs/dbt-agent-skills) (4 skills) | dbt | Analytics engineering with dbt. Apache-2.0. Only planned when a `dbt_project.yml` exists. |
+| [MotherDuck](https://github.com/motherduckdb/agent-skills) `motherduck-duckdb-sql` | duckdb | DuckDB SQL syntax. MIT. Only planned when DuckDB is a dependency. |
+| Anthropic document skills (`docx`, `xlsx`, `pptx`, `pdf`) | manual | Reports and decks from results. Source-available, so each user runs `/plugin install document-skills@anthropic-agent-skills`; never copied into the repo. |
+
+Left out on purpose: skills under non-open licences (Commons Clause) or with no licence, repositories that no longer
+exist, and K-Dense's `scikit-learn` skill, whose declared licence (BSD-3-Clause) differs from its repository's (MIT).
+The same token note applies as for the design pack: each auto-invoked skill adds its description to every session.
+
 ## Updating
 
 ```bash
@@ -207,6 +254,7 @@ next to it as `<file>.kit-new`.
 - To install: Node 18+ (`npx`), or Go (`go install`), or neither (release binary or git clone).
 - Optional: `jq`. The hooks fall back to python3, then node, then a regex parser.
 - Go projects: `golangci-lint` is used if installed; otherwise lint falls back to a `gofmt -l` check.
+- Python projects: pytest, ruff and mypy/pyright, installed in the project's environment. Whatever isn't configured is skipped.
   `go test -race` needs cgo and a C compiler, so the kit leaves it to CI or Docker.
 
 ## Existing projects

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.6.0 — 2026-10-26
+**Python and data science.**
+- **Python stack (`py`).** Detected from `pyproject.toml`, `setup.py`/`setup.cfg`, `requirements*.txt`, `Pipfile` or
+  `environment.yml`. Commands run through the lockfile's runner (`uv run`, `poetry run`, `pdm run`, `pipenv run`, else
+  `python -m`); pytest, ruff and mypy/pyright are wired only when configured or listed as dependencies, so the rest show
+  SKIP. Permissions allow the checks and ask before dependency changes. Adds a path-scoped `python.md` rule.
+- **Stacks combine.** `go,py`, `ts,py` and `go,ts,py` are detected automatically or set with `--stack go,py`; `both` still
+  means `go,ts`, so existing manifests and generated files are unchanged. A Go or TS project that also has a
+  `requirements.txt` is now detected as a mixed stack on a first install (updates keep the recorded stack).
+- **Data layer (`--data`, automatic for Python projects using a data library, a notebook or dbt).** A path-scoped
+  `data-science.md` rule, `docs/data.md` for data context, and `/assumptions`, a cold read-only Opus audit of an analysis
+  before it's shared. Recorded in the manifest, so `--update` keeps it.
+- **Data pack.** `data-pack.sh` / `claude-kit pack data`: curated, licence-checked third-party skills installed from
+  upstream with their licences (Anthropic data skills, K-Dense EDA and visualisation, OpenAI notebooks, ML pipeline and
+  SHAP, dbt and DuckDB when the project uses them). Anthropic's document skills are listed as a per-user plugin install.
+- Packs share `pack-lib.sh`. The notices block header now reads "maintained by claude-kit packs"; a skill whose licence
+  lives in its own folder upstream can name that path.
+
 ## 1.5.1 — 2026-10-22
 First npm release. 1.5.0 reached GitHub Releases and `go install`, but npm rejected it.
 - npm packages: `repository.url` now uses the GitHub repo's exact case (`Horac3/claude-kit`). npm's provenance check

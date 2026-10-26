@@ -32,11 +32,13 @@ You need:
 | Claude Code | `claude --version` | Any recent version. |
 | bash | `bash --version` | macOS and Linux have it. On Windows, use **Git Bash** or **WSL**. |
 | git | `git --version` | The project should be a git repository. |
-| Go and/or Node | `go version` / `node --version` | Whatever your project already uses. Node 18+ also lets you install with `npx`; Go lets you install with `go install`. |
+| Go, Node and/or Python | `go version` / `node --version` / `python --version` | Whatever your project already uses. Node 18+ also lets you install with `npx`; Go lets you install with `go install`. |
 | jq *(optional)* | `jq --version` | The hooks use jq if it's there, then fall back to python3, node, or a built-in parser. |
 | golangci-lint *(optional, Go)* | `golangci-lint --version` | Used for lint if installed; otherwise lint is a `gofmt -l` check. |
+| pytest, ruff, mypy or pyright *(Python)* | in the project's environment | Each is wired only if the project configures or depends on it; the others show `SKIP`. |
 
-The kit works with **Go**, **TypeScript/JavaScript** (pnpm, npm, yarn, or bun), or **both in one repo**.
+The kit works with **Go**, **TypeScript/JavaScript** (pnpm, npm, yarn, or bun), **Python** (uv, poetry, pdm, pipenv or
+plain pip), or any mix of them in one repo. Data-science projects get an extra layer (see [8.3](#83-data-science-projects)).
 
 ## 2. Get the kit
 
@@ -73,7 +75,8 @@ claude-kit init --dry-run ~/code/my-project
 claude-kit init ~/code/my-project       # or, inside the project: claude-kit init
 ```
 
-The installer works out the stack from `go.mod` / `package.json` and the package manager from your lockfile:
+The installer works out the stack from `go.mod` / `package.json` / `pyproject.toml` (or `requirements*.txt`, `setup.py`,
+`Pipfile`, `environment.yml`) and the package manager or Python runner from your lockfile:
 
 ```
 claude-kit 1.0.0 → /home/you/code/my-project  (mode: install, stack: go)
@@ -93,8 +96,9 @@ Options:
 
 | Flag | Use it when |
 |---|---|
-| `--stack go\|ts\|both` | Auto-detection is wrong, or the repo is empty (no `go.mod` or `package.json` yet). |
+| `--stack go\|ts\|py\|both` | Auto-detection is wrong, or the repo is empty (no project file yet). Several stacks: `--stack go,py`. `both` means `go,ts`. |
 | `--frontend` | A non-TypeScript project renders UI (e.g. a Go service with HTML templates) and you want `/ui`, `ui-checker` and the frontend rule. `--update` keeps it. |
+| `--data` | You want the data-science layer and it wasn't detected (it is automatic for Python projects that use pandas, polars, scikit-learn, DuckDB and the like, hold a notebook, or have a dbt project). `--update` keeps it. |
 | `--dry-run` | You want to see the plan without writing anything. |
 | `claude-kit update` | The kit is already installed and you want a newer version (see [step 12](#12-update-the-kit)). With a git clone: `install.sh --update`. |
 
@@ -271,6 +275,7 @@ Use these on their own, outside the `/next` loop:
 | `/commit [note]` | `/commit` | Grouped Conventional Commits; you confirm each. |
 | `/handoff` | `/handoff` | Write state to `docs/progress.md` now. |
 | `/remap [area\|full]` | `/remap` | Refresh `docs/architecture.md` from what changed in git since it was last mapped. Run it when the session start says the map is stale, or after a big restructure. |
+| `/assumptions <analysis>` *(data layer)* | `/assumptions churn model in notebooks/churn.ipynb` | A cold, read-only Opus audit of what a result silently relies on, with a verdict. Approve it to save to `docs/assumptions.md`. See [§8.3](#83-data-science-projects). |
 | `/ui <screen>` *(TS projects)* | `/ui booking form with date picker and confirmation` | A short design brief, then a test-first build, then a screenshot check at desktop and mobile widths by the `ui-checker` subagent. See [§8.1](#81-frontend-work-ui). |
 
 ### 8.1 Frontend work: `/ui`
@@ -333,6 +338,34 @@ The README's [Design pack](README.md#design-pack-optional-ts-projects) section e
 **Give the project a `DESIGN.md`.** Once the pack is installed, ask for `/impeccable document`, or copy a reference from
 [awesome-design-md](https://github.com/VoltAgent/awesome-design-md) and adapt it. From then on `/ui`, the frontend rule and
 `ui-checker` all follow it, so the visual language stays the same from session to session without being re-explained.
+
+### 8.3 Data-science projects
+
+The data layer adds a rule that loads for notebooks, SQL, dbt models and data folders, a `docs/data.md` for the data
+context, and `/assumptions`. Use them like this:
+
+1. **Fill in `docs/data.md`** once: the question, each source and its grain ("one row per order line"), keys,
+   definitions, gotchas (time zones, soft deletes, test accounts), which columns are personal data, and where results go.
+   Claude reads it before touching data and adds what it learns. With the data pack's `data-context-extractor` skill,
+   Claude can interview you and draft it.
+2. **Work in steps as usual.** `/next` and `/tdd` still apply. Put reusable logic in modules with pytest tests, and keep
+   notebooks for the narrative; each notebook should run cleanly top to bottom.
+3. **Before sharing a result, run `/assumptions <the analysis>`.** It audits the work in a fresh, read-only Opus context
+   and returns a table of what the result silently relies on, with a verdict (`SAFE TO SHARE`, `SHARE WITH CAVEATS` or
+   `NOT YET`). Approve it to save the audit to `docs/assumptions.md`, then fix or caveat each open item.
+
+**Optional data pack.** Curated third-party skills, installed from upstream with their licences (same rules as the design pack):
+
+```bash
+git add -A && git commit -m "wip"                # the script refuses to run with uncommitted .claude/ changes
+.claude/kit/data-pack.sh                         # see the plan for the core pack (Anthropic's data skills)
+.claude/kit/data-pack.sh core notebooks --apply  # install; also: eda, ml, dbt, duckdb, or all
+# same thing through the binary, from the project folder: claude-kit pack data core --apply
+```
+
+For reports and decks, add Anthropic's document skills inside Claude Code with
+`/plugin install document-skills@anthropic-agent-skills`. They are source-available, so never commit their files.
+The README's [Python and data science](README.md#python-and-data-science) section lists every skill and why it was chosen.
 
 Useful built-in Claude Code commands that fit this workflow: `/context` (what is using your context), `/usage`
 (token use and cost), `/rewind` (undo to a checkpoint), `/hooks` (inspect hooks).
@@ -512,10 +545,10 @@ The `/next` and `/tdd` flows assume it. To relax it, edit the "Tests" section of
 Yes. pnpm workspaces are detected and the commands use `pnpm -r --if-present run …`. Put
 package-specific rules in path-scoped rule files (`paths: ["apps/api/**"]`).
 
-**My project is Python, Rust, or Kotlin.**
-Install with the closest `--stack` (or `--stack go` for a neutral setup), then set your real commands
-in `.claude/kit/commands.env` and add a path-scoped rule file for the language. Everything else
-(skills, agents, hooks, the loop) is language-independent.
+**My project is Rust, Kotlin, or another language.**
+Python is supported directly (`--stack py`). For other languages, install with the closest `--stack` (or `--stack go`
+for a neutral setup), then set your real commands in `.claude/kit/commands.env` and add a path-scoped rule file for
+the language. Everything else (skills, agents, hooks, the loop) is language-independent.
 
 **Why not just use one long conversation?**
 Every message re-sends the whole conversation. A three-hour session pays for its entire history on every

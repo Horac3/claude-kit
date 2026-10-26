@@ -49,7 +49,7 @@ jobs:
       - name: Tests
         run: |
           sudo apt-get install -y shellcheck >/dev/null
-          shellcheck -S warning -x install.sh tests/run.sh kit/.claude/hooks/*.sh kit/.claude/kit/*.sh stacks/ts/.claude/kit/*.sh
+          shellcheck -S warning -x install.sh tests/run.sh kit/.claude/hooks/*.sh kit/.claude/kit/*.sh stacks/*/.claude/kit/*.sh
           git config --global init.defaultBranch main
           bash tests/run.sh
           go vet ./...

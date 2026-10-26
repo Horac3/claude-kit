@@ -1,12 +1,13 @@
 # claude-kit
 
-A drop-in Claude Code setup for Go and TypeScript projects: a small always-loaded context, model routing by
+A drop-in Claude Code setup for Go, TypeScript and Python projects (data science included): a small always-loaded context, model routing by
 delegation, file-based handoffs between conversations, and safety rules enforced by hooks.
 
 ```bash
-npx @horac3/claude-kit init          # install into the current project (auto-detects go / ts / both)
+npx @horac3/claude-kit init          # install into the current project (auto-detects go / ts / py, or a mix)
 npx @horac3/claude-kit@latest update # pull a newer kit into an installed project
 npx @horac3/claude-kit pack design   # optional third-party design skills (dry run; add --apply)
+npx @horac3/claude-kit pack data     # optional third-party data-science skills (dry run; add --apply)
 ```
 
 This npm package is a launcher for a prebuilt Go binary. npm installs only the binary that matches your
