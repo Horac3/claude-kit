@@ -21,7 +21,6 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="${CLAUDE_PROJECT_DIR:-$(cd "$here/../.." && pwd)}"
 cd "$root" || exit 1
 
-# shellcheck disable=SC2034  # apply is read by pack-lib.sh
 apply=0 list=0
 declare -a packs=()
 # shellcheck disable=SC2034  # apply is read by pack-lib.sh
