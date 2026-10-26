@@ -531,8 +531,8 @@ contains "$out" "stack: py" "detects the python stack from pyproject.toml"
 [ ! -f .claude/rules/kit/go.md ] && [ ! -f .claude/rules/kit/typescript.md ] && [ ! -f .claude/skills/ui/SKILL.md ] &&
   ok "python-only install adds no go, ts or frontend files" || ko "python-only install is python-only"
 env_file="$(cat .claude/kit/commands.env)"
-contains "$env_file" "CHECK_TEST='uv run pytest -q'" "uv: tests run with uv run pytest"
-contains "$env_file" "CHECK_TEST_ONE='uv run pytest -q -k \"\$1\"'" "uv: test-one filters with -k"
+contains "$env_file" "CHECK_TEST='uv run pytest -q || [ \$? -eq 5 ]'" "uv: tests run with uv run pytest (exit 5, no tests, is not a failure)"
+contains "$env_file" "CHECK_TEST_ONE='uv run pytest -q -k \"\$1\" || [ \$? -eq 5 ]'" "uv: test-one filters with -k"
 contains "$env_file" "CHECK_LINT='uv run ruff check .'" "ruff config: lint with ruff"
 contains "$env_file" "CHECK_TYPECHECK='uv run mypy .'" "mypy config: typecheck with mypy"
 contains "$env_file" "CHECK_FORMAT='uv run ruff format --check .'" "ruff config: format check with ruff"
@@ -543,18 +543,19 @@ out="$("$KIT/install.sh" --update "$Y" 2>&1)"
 contains "$out" "stack: py" "update keeps the python stack"
 
 echo "== installer: python project (plain pip, poetry, pyright)"
-Y2="$WORK/pypip"; mkdir -p "$Y2/tests"; cd "$Y2" || exit 1; git init -q
+PYRUN="python -m"; command -v python >/dev/null 2>&1 || PYRUN="python3 -m"   # the installer does the same
+Y2="$WORK/pypip"; mkdir -p "$Y2"; cd "$Y2" || exit 1; git init -q
 printf 'pandas==2.2.3\npytest==8.3.3\n' >requirements.txt
 "$KIT/install.sh" "$Y2" >/dev/null 2>&1
 env_file="$(cat .claude/kit/commands.env)"
-contains "$env_file" "CHECK_TEST='python -m pytest -q'" "pip: tests run with python -m pytest"
+contains "$env_file" "CHECK_TEST='$PYRUN pytest -q || [ \$? -eq 5 ]'" "pip: tests run with $PYRUN pytest"
 contains "$env_file" "CHECK_LINT=''" "no ruff configured: lint left empty (SKIP)"
 contains "$env_file" "CHECK_TYPECHECK=''" "no type checker configured: typecheck left empty (SKIP)"
 Y3="$WORK/pypoetry"; mkdir -p "$Y3"; cd "$Y3" || exit 1; git init -q
 printf '[tool.poetry]\nname = "x"\n\n[tool.pyright]\nstrict = ["src"]\n' >pyproject.toml; : >poetry.lock; : >conftest.py
 "$KIT/install.sh" "$Y3" >/dev/null 2>&1
 env_file="$(cat .claude/kit/commands.env)"
-contains "$env_file" "CHECK_TEST='poetry run pytest -q'" "poetry: tests run with poetry run"
+contains "$env_file" "CHECK_TEST='poetry run pytest -q || [ \$? -eq 5 ]'" "poetry: tests run with poetry run"
 contains "$env_file" "CHECK_TYPECHECK='poetry run pyright'" "pyright config: typecheck with pyright"
 
 echo "== installer: go + python in one repo"
@@ -565,16 +566,45 @@ out="$("$KIT/install.sh" "$GP" 2>&1)"
 contains "$out" "stack: go,py" "detects go and python together"
 [ -f .claude/rules/kit/go.md ] && [ -f .claude/rules/kit/python.md ] && ok "go and python rules both installed" || ko "go+py rules" "$out"
 env_file="$(cat .claude/kit/commands.env)"
-contains "$env_file" "CHECK_TEST='(go test ./...) && (python -m pytest -q)'" "go+py: both test suites run"
-grep -qF 'Bash(go test *)' .claude/settings.json && grep -qF 'Bash(python -m pytest *)' .claude/settings.json &&
+contains "$env_file" "CHECK_TEST='(go test ./...) && ($PYRUN pytest -q || [ \$? -eq 5 ])'" "go+py: both test suites run"
+grep -qF 'Bash(go test *)' .claude/settings.json && grep -qF "Bash($PYRUN pytest *)" .claude/settings.json &&
   ok "go+py: both permission sets" || ko "go+py permissions" "$(cat .claude/settings.json)"
 E="$WORK/pyempty"; mkdir -p "$E"; cd "$E" || exit 1; git init -q
 out="$("$KIT/install.sh" --stack py "$E" 2>&1)"
 contains "$out" "stack: py" "--stack py works on an empty repo"
 expect_exit 2 "--stack rejects an unknown stack" "$KIT/install.sh" --stack rust "$E"
 grep -qx 'stack=py' .claude/kit/manifest && ok "empty repo with --stack py records py" || ko "--stack py manifest"
+for bad in "go py" "" "go,," ",py"; do
+  expect_exit 2 "--stack rejects '$bad'" "$KIT/install.sh" --stack "$bad" "$E"
+done
 cd "$P" || exit 1
 grep -qx 'stack=go' .claude/kit/manifest && ok "go-only manifest still records stack=go" || ko "go manifest unchanged"
+
+echo "== installer: python false positives"
+TD="$WORK/tsdocs"; mkdir -p "$TD/test"; cd "$TD" || exit 1; git init -q
+printf '{"name":"x","scripts":{"test":"vitest run"}}\n' >package.json; printf 'mkdocs==1.6.1\n' >requirements-docs.txt
+out="$("$KIT/install.sh" "$TD" 2>&1)"
+contains "$out" "stack: ts, pm:" "a requirements file next to package.json (docs tooling) does not add python"
+GT="$WORK/gotests"; mkdir -p "$GT/tests"; cd "$GT" || exit 1; git init -q
+printf 'module example.com/x\n\ngo 1.22\n' >go.mod; printf '[project]\nname = "tools"\n' >pyproject.toml; echo 'fixture' >tests/data.json
+"$KIT/install.sh" "$GT" >/dev/null 2>&1
+! grep -q pytest .claude/kit/commands.env && ok "a tests/ folder with no Python tests does not wire pytest" || ko "bare tests/ wires pytest" "$(cat .claude/kit/commands.env)"
+PT="$WORK/pytests"; mkdir -p "$PT/tests"; cd "$PT" || exit 1; git init -q
+printf '[project]\nname = "x"\n' >pyproject.toml; printf 'def test_a():\n    assert True\n' >tests/test_a.py
+"$KIT/install.sh" "$PT" >/dev/null 2>&1
+grep -q "CHECK_TEST='$PYRUN pytest" .claude/kit/commands.env && ok "test_*.py files wire pytest" || ko "test files wire pytest" "$(cat .claude/kit/commands.env)"
+CM="$WORK/pycomment"; mkdir -p "$CM"; cd "$CM" || exit 1; git init -q
+printf '# was using pandas, removed\nrequests==2.32.3\n' >requirements.txt
+printf '[project]\nname = "x"\ndescription = "talks to a numpy service"\n' >pyproject.toml
+"$KIT/install.sh" "$CM" >/dev/null 2>&1
+grep -qx 'data=0' .claude/kit/manifest && ok "comments and descriptions that mention a data library do not add the data layer" || ko "py_deps false positive"
+
+echo "== check runner: pytest with nothing to run"
+cd "$Y" || exit 1
+printf '#!/bin/sh\necho "no tests ran in 0.00s"\nexit 5\n' >"$FB/pytest"; chmod +x "$FB/pytest"
+printf "CHECK_TEST='pytest -q || [ \$? -eq 5 ]'\n" >>.claude/kit/commands.env
+out="$(PATH="$FB:$PATH" .claude/kit/check.sh test 2>&1)"
+contains "$out" "SKIP test (nothing ran)" "pytest exit 5 (no tests) shows SKIP, not PASS or FAIL"
 
 echo "== installer: data layer"
 DS="$WORK/dsproj"; mkdir -p "$DS/notebooks"; cd "$DS" || exit 1; git init -q
@@ -617,6 +647,9 @@ DB="$WORK/dbtproj"; mkdir -p "$DB/.claude/kit"; : >"$DB/dbt_project.yml"; printf
 out="$(CLAUDE_PROJECT_DIR="$DB" .claude/kit/data-pack.sh dbt duckdb 2>&1)"
 contains "$out" "dbt-labs/dbt-agent-skills --skill using-dbt-for-analytics-engineering" "dbt pack planned when dbt_project.yml exists"
 contains "$out" "motherduckdb/agent-skills --skill motherduck-duckdb-sql" "duckdb pack planned when duckdb is a dependency"
+printf 'dbt-duckdb==1.9.1\n' >"$DB/requirements.txt"
+out="$(CLAUDE_PROJECT_DIR="$DB" .claude/kit/data-pack.sh duckdb 2>&1)"
+contains "$out" "motherduck-duckdb-sql" "dbt-duckdb counts as a duckdb dependency"
 out="$(.claude/kit/data-pack.sh --list 2>&1)"
 contains "$out" "notebooks" "--list describes the packs"
 expect_exit 2 "data pack rejects an unknown pack" .claude/kit/data-pack.sh nope

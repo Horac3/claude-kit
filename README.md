@@ -120,7 +120,7 @@ docs/data.md                       project  — data sources, grain, definitions
 .claude/rules/kit/go.md              on demand  **/*.go            (go and both stacks)
 .claude/rules/kit/typescript.md      on demand  **/*.ts(x), package.json, tsconfig   (ts and both stacks)
 .claude/rules/kit/python.md          on demand  **/*.py, pyproject.toml, requirements*.txt, conftest.py   (py stack)
-.claude/rules/kit/data-science.md    on demand  **/*.ipynb, notebooks/, analysis/, *.sql, dbt, models/, data/   (data layer)
+.claude/rules/kit/data-science.md    on demand  **/*.ipynb, notebooks/, analysis/, *.sql, dbt models, data/   (data layer)
 .claude/rules/kit/frontend.md        on demand  **/*.{tsx,jsx,vue,svelte,css,scss,html,tmpl,gohtml,templ}  (ts and both stacks, or --frontend)
 ```
 
@@ -171,10 +171,13 @@ overwrites an existing file. The projects behind the kit are credited in [CREDIT
 ## Python and data science
 
 **Python** is a stack like Go and TypeScript. It's detected from `pyproject.toml`, `setup.py`/`setup.cfg`,
-`requirements*.txt`, `Pipfile` or `environment.yml`. Stacks combine, so a Go service with a Python model folder installs
-as `go,py`; force it with `--stack go,py`. Commands run through the runner your lockfile implies (`uv run`, `poetry run`,
-`pdm run`, `pipenv run`, else `python -m`). pytest, ruff and mypy or pyright are wired only when the project configures or
-depends on them, so a missing tool shows `SKIP` instead of a false failure.
+`requirements*.txt`, `Pipfile` or `environment.yml` at the repo root. Stacks combine: a repo with `go.mod` and
+`pyproject.toml` installs as `go,py`. A lone `requirements*.txt` next to `go.mod` or `package.json` is treated as tooling
+(mkdocs, pre-commit), so pass `--stack go,py` if it really is Python, or if your Python lives in a subfolder. Commands run
+through the runner your lockfile implies (`uv run`, `poetry run`, `pdm run`, `pipenv run`, else `python -m`, or
+`python3 -m` where there is no `python`). pytest is wired when it's configured, a dependency, or there are `test_*.py`
+files; ruff and mypy or pyright when configured or listed as dependencies. Anything missing shows `SKIP` instead of a
+false failure, and so does a pytest run that collects no tests.
 
 **The data layer** is added with `--data`, and automatically for Python projects that use a data library (pandas, polars,
 scikit-learn, DuckDB, …), hold a notebook, or have a dbt project. It brings:

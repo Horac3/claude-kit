@@ -50,6 +50,9 @@ NOTHING_RE='No projects matched|None of the selected packages has a|No packages 
 RUNNER_RE='(^|[^[:alnum:]_-])(pnpm|npm|bun)[[:space:]]([^;&|]*[[:space:]])?run([[:space:]]|$)'
 nothing_ran() { # nothing_ran <command> <log>
   grep -qE "$NOTHING_RE" "$2" && return 0
+  # pytest on its own: "no tests ran" or "N deselected" (none selected). Not when another stack's tests ran too.
+  grep -qE '^(no tests ran|[0-9]+ deselected) in [0-9.]+s' "$2" &&
+    ! printf '%s' "$1" | grep -qE 'go test|vitest|jest|(pnpm|npm|yarn|bun)[[:space:]]' && return 0
   printf '%s' "$1" | grep -qE "$RUNNER_RE" || return 1
   ! grep -vE '^Scope: [0-9]+ of [0-9]+ workspace projects' "$2" | grep -q '[^[:space:]]'
 }

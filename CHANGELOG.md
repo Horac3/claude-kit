@@ -5,10 +5,11 @@
 - **Python stack (`py`).** Detected from `pyproject.toml`, `setup.py`/`setup.cfg`, `requirements*.txt`, `Pipfile` or
   `environment.yml`. Commands run through the lockfile's runner (`uv run`, `poetry run`, `pdm run`, `pipenv run`, else
   `python -m`); pytest, ruff and mypy/pyright are wired only when configured or listed as dependencies, so the rest show
-  SKIP. Permissions allow the checks and ask before dependency changes. Adds a path-scoped `python.md` rule.
+  SKIP; pytest's "no tests collected" (exit 5) shows SKIP too. Uses `python3 -m` where there is no `python`.
+  Permissions allow the checks and ask before dependency changes. Adds a path-scoped `python.md` rule.
 - **Stacks combine.** `go,py`, `ts,py` and `go,ts,py` are detected automatically or set with `--stack go,py`; `both` still
-  means `go,ts`, so existing manifests and generated files are unchanged. A Go or TS project that also has a
-  `requirements.txt` is now detected as a mixed stack on a first install (updates keep the recorded stack).
+  means `go,ts`, so existing manifests and generated files are unchanged. A lone `requirements*.txt` next to `go.mod` or
+  `package.json` is treated as tooling and doesn't add Python; malformed `--stack` values are rejected.
 - **Data layer (`--data`, automatic for Python projects using a data library, a notebook or dbt).** A path-scoped
   `data-science.md` rule, `docs/data.md` for data context, and `/assumptions`, a cold read-only Opus audit of an analysis
   before it's shared. Recorded in the manifest, so `--update` keeps it.

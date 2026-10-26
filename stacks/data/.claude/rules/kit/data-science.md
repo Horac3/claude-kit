@@ -5,7 +5,8 @@ paths:
   - "**/analysis/**"
   - "**/*.sql"
   - "**/dbt_project.yml"
-  - "**/models/**"
+  - "**/models/**/*.sql"
+  - "**/models/**/*.yml"
   - "**/data/**"
 ---
 

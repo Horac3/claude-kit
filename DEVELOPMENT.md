@@ -32,7 +32,7 @@ kit/.claude/kit/pack-lib.sh  shared plan/--apply/licence-notices machinery, sour
 scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md;
                              docs/data.md with the data layer
 examples/tally/              fictional project showing a migrated CLAUDE.md and path-scoped rules
-tests/run.sh                 self-tests (238); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
+tests/run.sh                 self-tests (248); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
 go.mod, kitfs.go             Go module github.com/horac3/claude-kit; kitfs.go embeds install.sh, VERSION, kit/, stacks/, scaffold/
 cmd/claude-kit/              the CLI: init, update, pack design, pack data, version. Unpacks the embedded kit to a temp dir and runs
                              install.sh or a pack script with bash (Git Bash on Windows). main_test.go proves `init`

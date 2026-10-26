@@ -43,10 +43,11 @@ lib="$here/pack-lib.sh"; [ -f "$lib" ] || lib="$here/../../../../kit/.claude/kit
 # shellcheck source=../../../../kit/.claude/kit/pack-lib.sh
 . "$lib"
 
-depends_on() { # depends_on <package>: listed in pyproject.toml, a requirements file, Pipfile or environment.yml
-  local f
-  for f in pyproject.toml requirements*.txt Pipfile environment.yml; do
-    [ -f "$f" ] && grep -qiE "(^|[^[:alnum:]_.-])$1([^[:alnum:]_.-]|$)" "$f" && return 0
+depends_on() { # depends_on <package>: a dependency in pyproject.toml, a requirements file, Pipfile or environment.yml
+  local f end='([^[:alnum:]_.-]|$)'
+  [ -f pyproject.toml ] && sed 's/#.*//' pyproject.toml | grep -qiE "[\"']$1$end|^[[:space:]]*$1[[:space:]]*=" && return 0
+  for f in requirements*.txt Pipfile environment.yml; do
+    [ -f "$f" ] && sed 's/#.*//' "$f" | grep -qiE "^[[:space:]]*(-[[:space:]]*)?$1$end" && return 0
   done
   return 1
 }
@@ -78,7 +79,7 @@ for p in "${packs[@]}"; do
       fi
       ;;
     duckdb)
-      if depends_on duckdb; then
+      if depends_on duckdb || depends_on dbt-duckdb; then
         add "$SKILLS motherduckdb/agent-skills --skill motherduck-duckdb-sql $FLAGS" motherduckdb/agent-skills
       else
         note "duckdb: skipped, duckdb is not a dependency of this project."

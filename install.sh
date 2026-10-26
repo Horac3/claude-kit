@@ -129,7 +129,11 @@ has_go=0 has_ts=0 has_py=0
 [ -f "$target/go.mod" ] || [ -f "$target/go.work" ] && has_go=1
 [ -f "$target/package.json" ] && has_ts=1
 for f in pyproject.toml setup.py setup.cfg Pipfile environment.yml; do [ -f "$target/$f" ] && has_py=1; done
-for f in "$target"/requirements*.txt; do [ -f "$f" ] && has_py=1; done
+# A requirements file on its own marks a Python project; next to go.mod or package.json it is usually docs or
+# tooling (mkdocs, pre-commit), so it doesn't add Python there. Use --stack go,py if it does.
+if [ $has_go -eq 0 ] && [ $has_ts -eq 0 ]; then
+  for f in "$target"/requirements*.txt; do [ -f "$f" ] && has_py=1; done
+fi
 if [ "$stack" = "auto" ]; then
   stack=""
   [ $has_go -eq 1 ] && stack="go"
@@ -141,31 +145,39 @@ if [ "$stack" = "auto" ]; then
     exit 1
   fi
 fi
+bad_stack() { echo "--stack must be go, ts, py, both or auto (several: comma-separated, e.g. go,py)" >&2; exit 2; }
+case "$stack" in "" | *[!a-z,]* | ,* | *, | *,,*) bad_stack ;; esac
 stacks=",${stack/both/go,ts},"   # membership list, e.g. ",go,py,"
 for s in $(printf '%s' "$stack" | tr ',' ' '); do
-  case "$s" in go | ts | py | both) ;; *) echo "--stack must be go, ts, py, both or auto (several: comma-separated)" >&2; exit 2 ;; esac
+  case "$s" in go | ts | py | both) ;; *) bad_stack ;; esac
 done
 has_stack() { case "$stacks" in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
 # Python runner, from the lockfile: uv, poetry, pdm, pipenv, else the active interpreter (python -m).
 py_x="python -m"
+command -v python >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1 || py_x="python3 -m"   # Debian, stock macOS
 if [ -f "$target/uv.lock" ]; then py_x="uv run"
 elif [ -f "$target/poetry.lock" ]; then py_x="poetry run"
 elif [ -f "$target/pdm.lock" ]; then py_x="pdm run"
 elif [ -f "$target/Pipfile" ] || [ -f "$target/Pipfile.lock" ]; then py_x="pipenv run"
 fi
 py_conf() { grep -qE "$1" "$target/pyproject.toml" 2>/dev/null; }   # py_conf <regex>: pyproject.toml has it
-py_deps() { # py_deps <name>: the package is listed in pyproject.toml or a requirements file
-  local f
-  for f in "$target/pyproject.toml" "$target"/requirements*.txt "$target/Pipfile" "$target/environment.yml"; do
-    [ -f "$f" ] && grep -qiE "(^|[^[:alnum:]_.-])$1([^[:alnum:]_.-]|$)" "$f" && return 0
+py_deps() { # py_deps <name>: the package is a dependency (not just mentioned in a comment or a description)
+  local f end='([^[:alnum:]_.-]|$)'
+  # pyproject.toml: a quoted requirement ("pandas>=2") or a table key (poetry: pandas = "^2").
+  [ -f "$target/pyproject.toml" ] && sed 's/#.*//' "$target/pyproject.toml" |
+    grep -qiE "[\"']$1$end|^[[:space:]]*$1[[:space:]]*=" && return 0
+  # requirements, Pipfile, environment.yml: the name starts a line (after "- " in conda files).
+  for f in "$target"/requirements*.txt "$target/Pipfile" "$target/environment.yml"; do
+    [ -f "$f" ] && sed 's/#.*//' "$f" | grep -qiE "^[[:space:]]*(-[[:space:]]*)?$1$end" && return 0
   done
   return 1
 }
 py_has_ruff() { py_conf '^\[tool\.ruff' || [ -f "$target/ruff.toml" ] || [ -f "$target/.ruff.toml" ] || py_deps ruff; }
-py_has_pytest() {
-  py_conf '^\[tool\.pytest' || [ -f "$target/pytest.ini" ] || [ -f "$target/conftest.py" ] ||
-    [ -d "$target/tests" ] || [ -d "$target/test" ] || py_deps pytest
+py_has_pytest() { # configured, a dependency, or there are Python test files (a bare tests/ folder is not enough)
+  py_conf '^\[tool\.pytest' || [ -f "$target/pytest.ini" ] || [ -f "$target/conftest.py" ] || py_deps pytest ||
+    [ -n "$(find "$target" -maxdepth 3 \( -name .git -o -name node_modules -o -name .venv -o -name venv \) -prune \
+      -o \( -name 'test_*.py' -o -name '*_test.py' \) -print 2>/dev/null | head -1)" ]
 }
 
 pm=pnpm
@@ -266,7 +278,8 @@ gen_commands() {
   if py_conf '^\[tool\.mypy' || [ -f "$target/mypy.ini" ] || [ -f "$target/.mypy.ini" ] ||
     grep -q '^\[mypy' "$target/setup.cfg" 2>/dev/null; then py_tc="$x mypy ."
   elif py_conf '^\[tool\.pyright' || [ -f "$target/pyrightconfig.json" ]; then py_tc="$x pyright"; fi
-  if py_has_pytest; then py_test="$x pytest -q"; py_one="$x pytest -q -k \"\$1\""; fi
+  # pytest exits 5 when it collects or selects no tests: not a failure (check.sh reports it as SKIP).
+  if py_has_pytest; then py_test="$x pytest -q || [ \$? -eq 5 ]"; py_one="$x pytest -q -k \"\$1\" || [ \$? -eq 5 ]"; fi
 
   # Combine the selected stacks: each target runs every stack's command (&&); empty ones are skipped.
   local tc="" lint="" test="" one="" fmt="" n=0 s
