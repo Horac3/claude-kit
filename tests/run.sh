@@ -507,6 +507,75 @@ EOF
   [ $rc -eq 1 ] && contains "$out" "no prebuilt binary" "launcher explains a missing platform binary" || ko "launcher missing-binary path" "$out"
 fi
 
+echo "== installer: python project (uv, ruff, mypy, pytest)"
+Y="$WORK/pyuv"; mkdir -p "$Y/tests"; cd "$Y" || exit 1; git init -q
+cat >pyproject.toml <<'EOF'
+[project]
+name = "shop"
+version = "0.1.0"
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+EOF
+: >uv.lock
+out="$("$KIT/install.sh" "$Y" 2>&1)"; rc=$?
+[ $rc -eq 0 ] && ok "python install exits 0" || ko "python install exits 0" "$out"
+contains "$out" "stack: py" "detects the python stack from pyproject.toml"
+[ -f .claude/rules/kit/python.md ] && ok "installs the python rule" || ko "installs the python rule" "$out"
+[ ! -f .claude/rules/kit/go.md ] && [ ! -f .claude/rules/kit/typescript.md ] && [ ! -f .claude/skills/ui/SKILL.md ] &&
+  ok "python-only install adds no go, ts or frontend files" || ko "python-only install is python-only"
+env_file="$(cat .claude/kit/commands.env)"
+contains "$env_file" "CHECK_TEST='uv run pytest -q'" "uv: tests run with uv run pytest"
+contains "$env_file" "CHECK_TEST_ONE='uv run pytest -q -k \"\$1\"'" "uv: test-one filters with -k"
+contains "$env_file" "CHECK_LINT='uv run ruff check .'" "ruff config: lint with ruff"
+contains "$env_file" "CHECK_TYPECHECK='uv run mypy .'" "mypy config: typecheck with mypy"
+contains "$env_file" "CHECK_FORMAT='uv run ruff format --check .'" "ruff config: format check with ruff"
+grep -qF 'Bash(uv run pytest *)' .claude/settings.json && ok "python permissions allow the test runner" || ko "python permissions" "$(cat .claude/settings.json)"
+! grep -qF 'Bash(go test *)' .claude/settings.json && ok "no go permissions in a python project" || ko "no go permissions in a python project"
+grep -qx 'stack=py' .claude/kit/manifest && ok "manifest records stack=py" || ko "manifest records stack=py"
+out="$("$KIT/install.sh" --update "$Y" 2>&1)"
+contains "$out" "stack: py" "update keeps the python stack"
+
+echo "== installer: python project (plain pip, poetry, pyright)"
+Y2="$WORK/pypip"; mkdir -p "$Y2/tests"; cd "$Y2" || exit 1; git init -q
+printf 'pandas==2.2.3\npytest==8.3.3\n' >requirements.txt
+"$KIT/install.sh" "$Y2" >/dev/null 2>&1
+env_file="$(cat .claude/kit/commands.env)"
+contains "$env_file" "CHECK_TEST='python -m pytest -q'" "pip: tests run with python -m pytest"
+contains "$env_file" "CHECK_LINT=''" "no ruff configured: lint left empty (SKIP)"
+contains "$env_file" "CHECK_TYPECHECK=''" "no type checker configured: typecheck left empty (SKIP)"
+Y3="$WORK/pypoetry"; mkdir -p "$Y3"; cd "$Y3" || exit 1; git init -q
+printf '[tool.poetry]\nname = "x"\n\n[tool.pyright]\nstrict = ["src"]\n' >pyproject.toml; : >poetry.lock; : >conftest.py
+"$KIT/install.sh" "$Y3" >/dev/null 2>&1
+env_file="$(cat .claude/kit/commands.env)"
+contains "$env_file" "CHECK_TEST='poetry run pytest -q'" "poetry: tests run with poetry run"
+contains "$env_file" "CHECK_TYPECHECK='poetry run pyright'" "pyright config: typecheck with pyright"
+
+echo "== installer: go + python in one repo"
+GP="$WORK/gopy"; mkdir -p "$GP"; cd "$GP" || exit 1; git init -q
+printf 'module example.com/svc\n\ngo 1.22\n' >go.mod
+printf '[project]\nname = "ml"\n\n[tool.pytest.ini_options]\n' >pyproject.toml
+out="$("$KIT/install.sh" "$GP" 2>&1)"
+contains "$out" "stack: go,py" "detects go and python together"
+[ -f .claude/rules/kit/go.md ] && [ -f .claude/rules/kit/python.md ] && ok "go and python rules both installed" || ko "go+py rules" "$out"
+env_file="$(cat .claude/kit/commands.env)"
+contains "$env_file" "CHECK_TEST='(go test ./...) && (python -m pytest -q)'" "go+py: both test suites run"
+grep -qF 'Bash(go test *)' .claude/settings.json && grep -qF 'Bash(python -m pytest *)' .claude/settings.json &&
+  ok "go+py: both permission sets" || ko "go+py permissions" "$(cat .claude/settings.json)"
+E="$WORK/pyempty"; mkdir -p "$E"; cd "$E" || exit 1; git init -q
+out="$("$KIT/install.sh" --stack py "$E" 2>&1)"
+contains "$out" "stack: py" "--stack py works on an empty repo"
+expect_exit 2 "--stack rejects an unknown stack" "$KIT/install.sh" --stack rust "$E"
+grep -qx 'stack=py' .claude/kit/manifest && ok "empty repo with --stack py records py" || ko "--stack py manifest"
+cd "$P" || exit 1
+grep -qx 'stack=go' .claude/kit/manifest && ok "go-only manifest still records stack=go" || ko "go manifest unchanged"
+
 if [ "${KIT_TEST_TS:-0}" = 1 ] && command -v pnpm >/dev/null; then
   echo "== check runner: real TypeScript project (pnpm + vitest)"
   T="$WORK/tsproj"; mkdir -p "$T/src"; cd "$T" || exit 1; git init -q

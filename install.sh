@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # claude-kit installer and updater.
 #
-#   ./install.sh [--stack go|ts|both|auto] [--frontend] [--dry-run] [TARGET_DIR]   first install (default: .)
+#   ./install.sh [--stack go|ts|py|both|auto] [--frontend] [--dry-run] [TARGET_DIR]   first install (default: .)
+#      --stack takes one stack or several, comma-separated (go,py). both is go,ts.
 #   ./install.sh --update [--frontend] [--dry-run] [TARGET_DIR]                    pull a newer kit into a project
 #
 # --frontend adds the frontend layer (frontend rule, /ui, ui-checker, shot.mjs, design-pack.sh) to any stack, e.g. a
@@ -121,19 +122,48 @@ install_project_file() { # <generated src> <rel>
 if [ "$mode" = "update" ] && [ "$stack" = "auto" ]; then
   prev="$(meta stack)"; [ -n "$prev" ] && stack="$prev"
 fi
-has_go=0 has_ts=0
+has_go=0 has_ts=0 has_py=0
 [ -f "$target/go.mod" ] || [ -f "$target/go.work" ] && has_go=1
 [ -f "$target/package.json" ] && has_ts=1
+for f in pyproject.toml setup.py setup.cfg Pipfile environment.yml; do [ -f "$target/$f" ] && has_py=1; done
+for f in "$target"/requirements*.txt; do [ -f "$f" ] && has_py=1; done
 if [ "$stack" = "auto" ]; then
-  if [ $has_go -eq 1 ] && [ $has_ts -eq 1 ]; then stack=both
-  elif [ $has_go -eq 1 ]; then stack=go
-  elif [ $has_ts -eq 1 ]; then stack=ts
-  else
-    echo "Could not detect the stack (no go.mod or package.json). Re-run with --stack go|ts|both." >&2
+  stack=""
+  [ $has_go -eq 1 ] && stack="go"
+  [ $has_ts -eq 1 ] && stack="${stack:+$stack,}ts"
+  [ $has_py -eq 1 ] && stack="${stack:+$stack,}py"
+  [ "$stack" = "go,ts" ] && stack=both   # the name manifests and messages have always used
+  if [ -z "$stack" ]; then
+    echo "Could not detect the stack (no go.mod, package.json or Python project file). Re-run with --stack go|ts|py (several: --stack go,py)." >&2
     exit 1
   fi
 fi
-case "$stack" in go | ts | both) ;; *) echo "--stack must be go, ts, both or auto" >&2; exit 2 ;; esac
+stacks=",${stack/both/go,ts},"   # membership list, e.g. ",go,py,"
+for s in $(printf '%s' "$stack" | tr ',' ' '); do
+  case "$s" in go | ts | py | both) ;; *) echo "--stack must be go, ts, py, both or auto (several: comma-separated)" >&2; exit 2 ;; esac
+done
+has_stack() { case "$stacks" in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
+
+# Python runner, from the lockfile: uv, poetry, pdm, pipenv, else the active interpreter (python -m).
+py_x="python -m"
+if [ -f "$target/uv.lock" ]; then py_x="uv run"
+elif [ -f "$target/poetry.lock" ]; then py_x="poetry run"
+elif [ -f "$target/pdm.lock" ]; then py_x="pdm run"
+elif [ -f "$target/Pipfile" ] || [ -f "$target/Pipfile.lock" ]; then py_x="pipenv run"
+fi
+py_conf() { grep -qE "$1" "$target/pyproject.toml" 2>/dev/null; }   # py_conf <regex>: pyproject.toml has it
+py_deps() { # py_deps <name>: the package is listed in pyproject.toml or a requirements file
+  local f
+  for f in "$target/pyproject.toml" "$target"/requirements*.txt "$target/Pipfile" "$target/environment.yml"; do
+    [ -f "$f" ] && grep -qiE "(^|[^[:alnum:]_.-])$1([^[:alnum:]_.-]|$)" "$f" && return 0
+  done
+  return 1
+}
+py_has_ruff() { py_conf '^\[tool\.ruff' || [ -f "$target/ruff.toml" ] || [ -f "$target/.ruff.toml" ] || py_deps ruff; }
+py_has_pytest() {
+  py_conf '^\[tool\.pytest' || [ -f "$target/pytest.ini" ] || [ -f "$target/conftest.py" ] ||
+    [ -d "$target/tests" ] || [ -d "$target/test" ] || py_deps pytest
+}
 
 pm=pnpm
 if [ -f "$target/pnpm-lock.yaml" ] || [ -f "$target/pnpm-workspace.yaml" ]; then pm=pnpm
@@ -143,7 +173,7 @@ elif [ -f "$target/package-lock.json" ]; then pm=npm
 fi
 [ "$mode" = "update" ] && [ -n "$(meta pm)" ] && pm="$(meta pm)"
 [ "$mode" = "update" ] && [ "$(meta frontend)" = 1 ] && frontend=1
-[ "$stack" != go ] && frontend=1   # ts and both stacks always get the frontend layer
+has_stack ts && frontend=1   # stacks with TypeScript always get the frontend layer
 
 # The frontend part of the TypeScript stack, installable on its own with --frontend.
 is_frontend_file() {
@@ -217,24 +247,44 @@ gen_commands() {
   fi
   ts_fmt="$exec prettier --check ."
 
-  local tc lint test one fmt
-  case "$stack" in
-    go)   tc="$go_tc"; lint="$go_lint"; test="$go_test"; one="$go_one"; fmt="$go_fmt" ;;
-    ts)   tc="$ts_tc"; lint="$ts_lint"; test="$ts_test"; one="$ts_one"; fmt="$ts_fmt" ;;
-    both) tc="$(and_then "$go_tc" "$ts_tc")"; lint="$(and_then "$go_lint" "$ts_lint")"
-          test="$(and_then "$go_test" "$ts_test")"; one="($go_one)${ts_one:+; ($ts_one)}"
-          fmt="$(and_then "$go_fmt" "$ts_fmt")" ;;
-  esac
+  # Python: the runner comes from the lockfile; each tool only when the project configures or depends on it.
+  local x="$py_x" py_tc="" py_lint="" py_test="" py_one="" py_fmt=""
+  if py_has_ruff; then py_lint="$x ruff check ."; py_fmt="$x ruff format --check ."; fi
+  if py_conf '^\[tool\.mypy' || [ -f "$target/mypy.ini" ] || [ -f "$target/.mypy.ini" ] ||
+    grep -q '^\[mypy' "$target/setup.cfg" 2>/dev/null; then py_tc="$x mypy ."
+  elif py_conf '^\[tool\.pyright' || [ -f "$target/pyrightconfig.json" ]; then py_tc="$x pyright"; fi
+  if py_has_pytest; then py_test="$x pytest -q"; py_one="$x pytest -q -k \"\$1\""; fi
+
+  # Combine the selected stacks: each target runs every stack's command (&&); empty ones are skipped.
+  local tc="" lint="" test="" one="" fmt="" n=0 s
+  join_and() { if [ -z "$1" ]; then echo "$2"; elif [ -z "$2" ]; then echo "$1"; else and_then "$1" "$2"; fi; }
+  for s in go ts py; do has_stack "$s" && n=$((n + 1)); done
+  pick() { # pick <stack> <target>
+    case "$1:$2" in
+      go:tc) echo "$go_tc" ;; go:lint) echo "$go_lint" ;; go:test) echo "$go_test" ;; go:one) echo "$go_one" ;; go:fmt) echo "$go_fmt" ;;
+      ts:tc) echo "$ts_tc" ;; ts:lint) echo "$ts_lint" ;; ts:test) echo "$ts_test" ;; ts:one) echo "$ts_one" ;; ts:fmt) echo "$ts_fmt" ;;
+      py:tc) echo "$py_tc" ;; py:lint) echo "$py_lint" ;; py:test) echo "$py_test" ;; py:one) echo "$py_one" ;; py:fmt) echo "$py_fmt" ;;
+    esac
+  }
+  local o
+  for s in go ts py; do
+    has_stack "$s" || continue
+    tc="$(join_and "$tc" "$(pick "$s" tc)")"; lint="$(join_and "$lint" "$(pick "$s" lint)")"
+    test="$(join_and "$test" "$(pick "$s" test)")"; fmt="$(join_and "$fmt" "$(pick "$s" fmt)")"
+    o="$(pick "$s" one)"
+    [ -z "$o" ] && continue
+    if [ $n -eq 1 ]; then one="$o"; else one="${one:+$one; }($o)"; fi
+  done
   q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
   cat <<EOF
 # claude-kit check commands (project-owned: edit freely; /kickoff verifies them).
 # Read by .claude/kit/check.sh. Each value runs with bash -c; in CHECK_TEST_ONE, \$1 is the pattern.
 # Leave a value empty to skip that target.
-# Stack: $stack$( [ "$stack" != go ] && printf ' · package manager: %s' "$pm")
+# Stack: $stack$(has_stack ts && printf ' · package manager: %s' "$pm")$(has_stack py && printf ' · python runner: %s' "$py_x")
 EOF
   echo "CHECK_TYPECHECK=$(q "$tc")"
   echo "CHECK_LINT=$(q "$lint")"
-  if [ "$stack" != ts ]; then
+  if has_stack go; then
     echo "# go test -race needs cgo and a C compiler: run it in CI or Docker, not here."
   fi
   echo "CHECK_TEST=$(q "$test")"
@@ -273,12 +323,12 @@ gen_settings() {
     "Bash(git branch -D *)" "Bash(git stash drop *)" "Bash(git stash clear *)"
     "Bash(find * -delete *)" "Read(./.env)" "Read(./.env.*)" "Read(**/.env)"
   )
-  if [ "$stack" != ts ]; then
+  if has_stack go; then
     allow+=("Bash(go build *)" "Bash(go vet *)" "Bash(go test *)" "Bash(go list *)" "Bash(go env *)"
       "Bash(go version)" "Bash(go doc *)" "Bash(gofmt -l *)" "Bash(golangci-lint run *)")
     ask+=("Bash(go get *)" "Bash(go mod *)" "Bash(go install *)" "Bash(go generate *)" "Bash(go run *)" "Bash(gofmt -w *)")
   fi
-  if [ "$stack" != go ]; then
+  if has_stack ts; then
     local x
     case "$pm" in pnpm) x="pnpm exec" ;; npm) x="npx" ;; yarn) x="yarn" ;; bun) x="bunx" ;; esac
     allow+=("Bash($x tsc --noEmit *)" "Bash($x vitest run *)" "Bash($pm ls *)" "Bash($pm why *)")
@@ -288,7 +338,18 @@ gen_settings() {
   if [ "$frontend" -eq 1 ]; then
     allow+=("Bash(node .claude/kit/shot.mjs *)" "Bash(npx -y impeccable detect *)" "Bash(npx impeccable detect *)"
       "Bash(.claude/kit/design-pack.sh)" "Bash(.claude/kit/design-pack.sh --list)")
-    [ "$stack" = go ] && ask+=("Bash(npx *)")
+    has_stack ts || ask+=("Bash(npx *)")
+  fi
+  if has_stack py; then
+    allow+=("Bash($py_x pytest *)" "Bash($py_x ruff check *)" "Bash($py_x ruff format --check *)"
+      "Bash($py_x mypy *)" "Bash($py_x pyright *)" "Bash(python --version)" "Bash(python3 --version)")
+    case "$py_x" in
+      "uv run") ask+=("Bash(uv add *)" "Bash(uv remove *)" "Bash(uv sync *)" "Bash(uv lock *)" "Bash(uv pip *)") ;;
+      "poetry run") ask+=("Bash(poetry add *)" "Bash(poetry remove *)" "Bash(poetry install *)" "Bash(poetry lock *)") ;;
+      "pdm run") ask+=("Bash(pdm add *)" "Bash(pdm remove *)" "Bash(pdm install *)") ;;
+      "pipenv run") ask+=("Bash(pipenv install *)" "Bash(pipenv uninstall *)") ;;
+    esac
+    ask+=("Bash(pip install *)" "Bash(pip3 install *)" "Bash(python -m pip install *)")
   fi
   cat <<EOF
 {
@@ -332,7 +393,7 @@ EOF
 }
 
 # ---------- run ----------
-echo "claude-kit $KIT_VERSION → $target  (mode: $mode, stack: $stack$( [ "$stack" != go ] && printf ', pm: %s' "$pm")$( [ "$stack" = go ] && [ "$frontend" -eq 1 ] && printf ' + frontend'))"
+echo "claude-kit $KIT_VERSION → $target  (mode: $mode, stack: $stack$(has_stack ts && printf ', pm: %s' "$pm")$(! has_stack ts && [ "$frontend" -eq 1 ] && printf ' + frontend'))"
 [ "$dry" -eq 1 ] && echo "(dry run: nothing will be written)"
 if [ "$mode" = "update" ] && [ ! -f "$manifest" ]; then
   echo "No manifest at .claude/kit/manifest: this looks like a first install. Run without --update." >&2
@@ -343,14 +404,14 @@ fi
 while IFS= read -r -d '' f; do
   install_kit_file "$f" "${f#"$KIT_DIR/kit/"}"
 done < <(find "$KIT_DIR/kit" -type f -print0 | sort -z)
-for s in go ts; do
-  if [ "$stack" = "$s" ] || [ "$stack" = both ]; then
+for s in go ts py; do
+  if has_stack "$s"; then
     while IFS= read -r -d '' f; do
       install_kit_file "$f" "${f#"$KIT_DIR/stacks/$s/"}"
     done < <(find "$KIT_DIR/stacks/$s" -type f -print0 | sort -z)
   fi
 done
-if [ "$stack" = go ] && [ "$frontend" -eq 1 ]; then
+if ! has_stack ts && [ "$frontend" -eq 1 ]; then
   while IFS= read -r -d '' f; do
     rel="${f#"$KIT_DIR/stacks/ts/"}"
     if is_frontend_file "$rel"; then install_kit_file "$f" "$rel"; fi
