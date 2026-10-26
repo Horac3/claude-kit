@@ -1,7 +1,7 @@
 // Command claude-kit installs and updates the claude-kit Claude Code setup in a project.
 //
 // Phase 1 of the Go CLI: the kit's files and its tested bash installer are embedded in this binary. Each command
-// unpacks them to a temporary folder and runs install.sh (or design-pack.sh) with bash, so every install route
+// unpacks them to a temporary folder and runs install.sh (or a pack script) with bash, so every install route
 // (git clone, go install, release binary, npm) produces identical results.
 package main
 
@@ -20,13 +20,16 @@ import (
 	claudekit "github.com/horac3/claude-kit"
 )
 
-const usage = `claude-kit: a Claude Code setup for Go and TypeScript projects.
+const usage = `claude-kit: a Claude Code setup for Go, TypeScript and Python projects.
 
 Usage:
-  claude-kit init   [--stack go|ts|both|auto] [--frontend] [--dry-run] [DIR]   install into a project (default: .)
-  claude-kit update [--frontend] [--dry-run] [DIR]                             update an installed project
+  claude-kit init   [--stack go|ts|py|both|auto] [--frontend] [--data] [--dry-run] [DIR]
+                                                     install into a project (default: .); --stack go,py for several
+  claude-kit update [--frontend] [--data] [--dry-run] [DIR]   update an installed project
   claude-kit pack design [core|motion|taste|shadcn|devtools|all] [--apply|--list]
-                                                                                 optional third-party design skills
+                                                     optional third-party design skills
+  claude-kit pack data [core|eda|notebooks|ml|dbt|duckdb|all] [--apply|--list]
+                                                     optional third-party data-science skills
   claude-kit version
   claude-kit help
 
@@ -74,25 +77,29 @@ func run(args []string, stdout, stderr io.Writer) int {
 func runPack(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprint(stdout, "Available packs:\n  design   third-party frontend design skills (Impeccable, Vercel guidelines, …)\n"+
-			"Run: claude-kit pack design --list\n")
+			"  data     third-party data-science skills (Anthropic data skills, notebooks, EDA, ML, dbt, DuckDB)\n"+
+			"Run: claude-kit pack design --list   or   claude-kit pack data --list\n")
 		return 0
 	}
-	switch args[0] {
-	case "design":
-		dir, err := os.Getwd()
-		if err != nil {
-			fmt.Fprintf(stderr, "claude-kit: %v\n", err)
-			return 1
-		}
-		return runScript(stderr, "stacks/ts/.claude/kit/design-pack.sh", args[1:], dir)
-	default:
-		fmt.Fprintf(stderr, "claude-kit: unknown pack %q (available: design)\n", args[0])
+	scripts := map[string]string{
+		"design": "stacks/ts/.claude/kit/design-pack.sh",
+		"data":   "stacks/data/.claude/kit/data-pack.sh",
+	}
+	script, ok := scripts[args[0]]
+	if !ok {
+		fmt.Fprintf(stderr, "claude-kit: unknown pack %q (available: design, data)\n", args[0])
 		return 2
 	}
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(stderr, "claude-kit: %v\n", err)
+		return 1
+	}
+	return runScript(stderr, script, args[1:], dir)
 }
 
 // runScript unpacks the embedded kit and runs one of its scripts with bash.
-// projectDir, when set, is passed as CLAUDE_PROJECT_DIR (design-pack.sh works on the current project).
+// projectDir, when set, is passed as CLAUDE_PROJECT_DIR (the pack scripts work on the current project).
 func runScript(stderr io.Writer, script string, args []string, projectDir string) int {
 	bash, err := findBash()
 	if err != nil {

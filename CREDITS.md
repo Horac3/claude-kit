@@ -21,7 +21,19 @@ against each project's LICENSE file; re-check them before relying on this table.
 | [Playwright](https://github.com/microsoft/playwright) | Screenshots and layout checks in `shot.mjs` (your project's own dependency) | Apache-2.0 |
 | [axe-core / @axe-core/playwright](https://github.com/dequelabs/axe-core) | Accessibility checks in `shot.mjs` (your project's own dependency) | MPL-2.0 |
 
-When the design pack copies skills or agents into a project, it also writes their upstream `LICENSE` (and `NOTICE`)
+The data pack (`data-pack.sh`, 1.6.0) works the same way. Licences checked on 2026-10-26 against each repository:
+
+| Project | What it does for the kit | Licence |
+|---|---|---|
+| [Anthropic knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) (data skills) | Profiling, statistics, SQL, charts, pre-share QA, data-context skill builder (data pack, core) | Apache-2.0 |
+| [K-Dense scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills) | EDA reports with leakage audits, scientific figures, SHAP (data pack, eda and ml) | MIT |
+| [OpenAI skills](https://github.com/openai/skills) (`jupyter-notebook`) | Notebook templates and a clean `.ipynb` writer (data pack, notebooks) | Apache-2.0 (licence file inside the skill folder) |
+| [wshobson/agents](https://github.com/wshobson/agents) (`ml-pipeline-workflow`) | MLOps pipeline structure (data pack, ml) | MIT |
+| [dbt Labs agent skills](https://github.com/dbt-labs/dbt-agent-skills) | Analytics engineering with dbt (data pack, dbt) | Apache-2.0 |
+| [MotherDuck agent skills](https://github.com/motherduckdb/agent-skills) (`motherduck-duckdb-sql`) | DuckDB SQL syntax (data pack, duckdb) | MIT |
+| [Anthropic skills](https://github.com/anthropics/skills) (document skills) | docx/xlsx/pptx/pdf output; each user installs the plugin | Source-available (Anthropic's terms). Never copy it into a repository |
+
+When a pack copies skills or agents into a project, it also writes their upstream `LICENSE` (and `NOTICE`)
 and lists them in the project's `THIRD_PARTY_NOTICES.md`, so a public project can commit them with the required notices.
 
 ## Built on
@@ -32,6 +44,11 @@ and lists them in the project's `THIRD_PARTY_NOTICES.md`, so a public project ca
 - The author's own Claude Code setup on a TypeScript monorepo, generalised into this kit.
 
 ## Discovered through
+
+The data pack's shortlist started from AI Builder Club's guide
+["Claude Code for data scientists"](https://www.aibuilderclub.com/blog/claude-code-for-data-scientists-skills-guide)
+(2026). Each candidate was then checked for an open licence and a live repository; the kit's own data rule and
+`/assumptions` are written in its own words.
 
 Two short-form videos about Claude Code design skills pointed the way to several of the tools above:
 

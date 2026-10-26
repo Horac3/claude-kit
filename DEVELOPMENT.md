@@ -26,12 +26,16 @@ kit/.claude/                 installed into every project (kit-owned, updatable)
   rules/kit/                 working-rules.md, model-routing.md (always); hexagonal.md, docker.md (path-scoped)
 stacks/go/.claude/           go.md rule
 stacks/ts/.claude/           typescript.md, frontend.md rules; /ui skill; ui-checker agent; shot.mjs; design-pack.sh
-scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md
+stacks/py/.claude/           python.md rule
+stacks/data/.claude/         data layer: data-science.md rule, /assumptions skill, data-pack.sh
+kit/.claude/kit/pack-lib.sh  shared plan/--apply/licence-notices machinery, sourced by design-pack.sh and data-pack.sh
+scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md;
+                             docs/data.md with the data layer
 examples/tally/              fictional project showing a migrated CLAUDE.md and path-scoped rules
-tests/run.sh                 self-tests (181); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
+tests/run.sh                 self-tests (248); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
 go.mod, kitfs.go             Go module github.com/horac3/claude-kit; kitfs.go embeds install.sh, VERSION, kit/, stacks/, scaffold/
-cmd/claude-kit/              the CLI: init, update, pack design, version. Unpacks the embedded kit to a temp dir and runs
-                             install.sh / design-pack.sh with bash (Git Bash on Windows). main_test.go proves `init`
+cmd/claude-kit/              the CLI: init, update, pack design, pack data, version. Unpacks the embedded kit to a temp dir and runs
+                             install.sh or a pack script with bash (Git Bash on Windows). main_test.go proves `init`
                              installs exactly what install.sh installs.
 npm/claude-kit/              npm launcher package (bin/claude-kit.js runs the platform binary)
 npm/build.mjs                builds the launcher + 6 platform packages from GoReleaser's dist/artifacts.json
@@ -41,6 +45,9 @@ npm/build.mjs                builds the launcher + 6 platform packages from GoRe
 ```
 
 `install.sh` generates `.claude/settings.json` and `.claude/kit/commands.env` per stack and package manager, in `gen_settings` and `gen_commands`.
+Stacks combine: `$stack` is `go`, `ts`, `py`, `both` (go,ts, kept for old manifests) or a comma list, and every check goes
+through `has_stack <name>`, never a comparison with `$stack`. Each target's command is the selected stacks' commands joined
+with `&&`, skipping empty ones; a stack's tool that the project doesn't configure stays empty, so `check.sh` shows SKIP.
 
 ## Invariants: do not break these
 
@@ -64,7 +71,7 @@ npm/build.mjs                builds the launcher + 6 platform packages from GoRe
    - Screenshots are viewed only by the `ui-checker` subagent.
    - Long third-party rule fetches (Vercel guidelines) run in a subagent.
 6. **Skill `!` injection blocks must not fail.** A non-zero exit aborts the whole skill, so end them with `true` or a pipe to `head`.
-7. **Third-party design tools are installed from upstream by `design-pack.sh`, never vendored.** It is a dry run by default and refuses to run with uncommitted `.claude/` changes.
+7. **Third-party skills are installed from upstream by the pack scripts (`design-pack.sh`, `data-pack.sh`), never vendored.** Both source `pack-lib.sh`. It is a dry run by default and refuses to run with uncommitted `.claude/` changes.
    - With `--apply` it writes each copied skill's or agent's upstream `LICENSE` (and `NOTICE`) and never overwrites an existing one.
    - In `THIRD_PARTY_NOTICES.md` it owns only the block between the `claude-kit:third-party` markers. Re-runs keep one entry per item, updated in place, and leave everything outside the block byte for byte.
    - It stays bash 3.2-safe (CI runs it on macOS): no associative arrays, and possibly-empty arrays are expanded as `${a[@]+"${a[@]}"}`.
@@ -102,11 +109,16 @@ npm/build.mjs                builds the launcher + 6 platform packages from GoRe
 - Headless runs of real Claude Code against an installed project: the guard blocked `rm` and the file survived; agents, rules and the SessionStart hook loaded; `test-runner` ran `check.sh`; `ui-checker` caught every planted defect.
 - `context.sh` against a real repo (go-chi/chi): hotspots, drift of 150 commits, and a dangling path were all detected.
 - A real `npx skills add` install of Vercel's and Emil Kowalski's skills; `claude mcp add ... --scope project` writes `.mcp.json`.
+- 1.6.0: real `data-pack.sh core eda notebooks ml --apply` (network, 2026-10-26): all 11 skills installed from upstream,
+  each with its upstream LICENSE (OpenAI's from inside the skill folder) and a correct notices entry; nothing left outside `.claude/`.
+- 1.6.0: go, ts and both installs produce byte-identical `commands.env` and `settings.json` to 1.5.1.
 
 **Not verified:**
 - **Impeccable's installer.** The build sandbox couldn't reach impeccable.style. Its `detect` CLI did work.
 - **macOS's bash 3.2.** `install.sh` uses arrays and `${var//}`, which should be fine, but it hasn't been run. Git for Windows' MSYS bash (as opposed to Cygwin bash) is also untested.
 - **`/kickoff` and `/remap` end to end with a human.** They are interactive, so only their scripts and structure are tested.
+- **The dbt and duckdb packs** against upstream (only their plans are tested), and the Python commands against real
+  uv/poetry/pdm projects (the generated commands are tested; running them needs those tools installed).
 - **The forked skills' `model:` override** (`/decide` on the Plan agent with opus, `/remap` on sonnet). It behaves as the docs describe, but hasn't been observed in a live run.
 
 ## Open items (in priority order)
@@ -150,7 +162,7 @@ npm/build.mjs                builds the launcher + 6 platform packages from GoRe
 8. **Package phase 2: port `install.sh` to Go** (`tasks/04-go-installer.md`). Removes the bash requirement for installing.
 9. **Skills uplift** (`tasks/05-skills-uplift.md`): NestJS rule, backend rules, reviewer upgrade, TypeScript additions,
    `/kickoff` spec mining, `/decide` pre-mortem, and the `pack go` / `pack payments` packs.
-10. **Maybe:** a `--stack` value for other languages (Python, Kotlin) with their own rule files and `commands.env` defaults.
+10. ~~A `--stack` value for Python~~ Done in 1.6.0 (`py`, plus the data layer). **Maybe:** Kotlin or Rust the same way.
 
 ## How to work on the kit
 
