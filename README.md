@@ -42,6 +42,7 @@ Working on the kit itself? Start with [DEVELOPMENT.md](DEVELOPMENT.md).
   /review       reviewer subagent on Opus, in its own context
   /commit       Conventional Commits, grouped; the permission prompt is your confirmation
   /handoff      writes Current step + Handoff notes into docs/progress.md
+  /handover     HANDOVER.md for passing the project to another engineer
   /clear        free; the next /next picks up exactly where you left off
 /decide <q>     an irreversible or cross-cutting decision, thought through on Opus in a fork → ADR
 /remap          refresh docs/architecture.md from git changes since it was last mapped
@@ -107,7 +108,7 @@ docs/data.md                       project  — data sources, grain, definitions
 .claude/hooks/guard-bash.sh        kit      — blocks rm, git clean/reset --hard/restore, force push, find -delete, .env reads…
 .claude/hooks/guard-files.sh       kit      — blocks .env, lockfiles, .git/, AGENTS.md, the guard config, Write over tracked files
 .claude/hooks/session-context.sh   kit
-.claude/skills/{kickoff,next,tdd,fix,handoff,review,decide,commit,remap}/SKILL.md   kit
+.claude/skills/{kickoff,next,tdd,fix,handoff,handover,review,decide,commit,remap}/SKILL.md   kit
 .claude/skills/kickoff/existing.md                                                  kit  — loaded only for existing codebases
 .claude/agents/{test-runner,reviewer,researcher,debugger}.md                        kit
 .claude/skills/ui/SKILL.md · agents/ui-checker.md · kit/shot.mjs · kit/design-pack.sh   kit  — ts and both stacks, or any stack with --frontend

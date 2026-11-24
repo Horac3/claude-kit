@@ -19,7 +19,7 @@ It started from the author's own setup on a TypeScript monorepo. `examples/tally
 ```
 install.sh                   installer and updater (bash). Hash manifest in the target: .claude/kit/manifest
 kit/.claude/                 installed into every project (kit-owned, updatable)
-  skills/                    kickoff (+ existing.md), next, tdd, fix, handoff, review, decide, commit, remap
+  skills/                    kickoff (+ existing.md), next, tdd, fix, handoff, handover, review, decide, commit, remap
   agents/                    test-runner (haiku), reviewer (opus), researcher (sonnet), debugger (sonnet)
   hooks/                     lib.sh, guard-bash.sh, guard-files.sh, session-context.sh
   kit/                       check.sh (filtered check runner), context.sh (repo summaries), statusline.sh

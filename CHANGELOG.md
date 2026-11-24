@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- **`/handover`**: writes `HANDOVER.md` so another engineer can take over a project: uncommitted or unpushed work first,
+  then status, architecture, integrations, configuration, run and deploy steps, runbook, known issues, decisions, open
+  work and questions for the owner. It only states what it can verify, marks gaps as `TODO (owner)`, changes no code
+  and copies no secrets. User-only (`disable-model-invocation`), so it costs nothing until typed. Distinct from
+  `/handoff`, which writes session notes into `docs/progress.md`.
+
 ## 1.6.0 — 2026-10-26
 **Python and data science.**
 - **Python stack (`py`).** Detected from `pyproject.toml`, `setup.py`/`setup.cfg`, `requirements*.txt`, `Pipfile` or
