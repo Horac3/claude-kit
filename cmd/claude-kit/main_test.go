@@ -263,3 +263,29 @@ func TestPackDataRunsFromTheBinary(t *testing.T) {
 		t.Errorf("pack data nope: exit %d, want 2", code)
 	}
 }
+
+// pack dotnet runs the embedded dotnet-pack.sh the same way.
+func TestPackDotnetRunsFromTheBinary(t *testing.T) {
+	if _, err := findBash(); err != nil {
+		t.Skip("bash not available: ", err)
+	}
+	dir := t.TempDir()
+	prev, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prev) })
+	var out bytes.Buffer
+	if code := run([]string{"pack", "dotnet", "--list"}, &out, &out); code != 0 {
+		t.Errorf("pack dotnet --list: exit %d, want 0", code)
+	}
+	if code := run([]string{"pack", "dotnet", "core", "api"}, &out, &out); code != 0 {
+		t.Errorf("pack dotnet core api (dry run): exit %d, want 0\n%s", code, out.String())
+	}
+	if code := run([]string{"pack", "dotnet", "nope"}, &out, &out); code != 2 {
+		t.Errorf("pack dotnet nope: exit %d, want 2", code)
+	}
+}

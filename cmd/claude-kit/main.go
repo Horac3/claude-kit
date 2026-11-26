@@ -20,16 +20,18 @@ import (
 	claudekit "github.com/horac3/claude-kit"
 )
 
-const usage = `claude-kit: a Claude Code setup for Go, TypeScript and Python projects.
+const usage = `claude-kit: a Claude Code setup for Go, TypeScript, Python and C# projects.
 
 Usage:
-  claude-kit init   [--stack go|ts|py|both|auto] [--frontend] [--data] [--dry-run] [DIR]
+  claude-kit init   [--stack go|ts|py|cs|both|auto] [--frontend] [--data] [--dry-run] [DIR]
                                                      install into a project (default: .); --stack go,py for several
   claude-kit update [--frontend] [--data] [--dry-run] [DIR]   update an installed project
   claude-kit pack design [core|motion|taste|shadcn|devtools|all] [--apply|--list]
                                                      optional third-party design skills
   claude-kit pack data [core|eda|notebooks|ml|dbt|duckdb|all] [--apply|--list]
                                                      optional third-party data-science skills
+  claude-kit pack dotnet [core|api|architecture|data|testing|performance|ops|aspire|akka|desktop|all] [--apply|--list]
+                                                     optional third-party C#/.NET skills
   claude-kit version
   claude-kit help
 
@@ -78,16 +80,18 @@ func runPack(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprint(stdout, "Available packs:\n  design   third-party frontend design skills (Impeccable, Vercel guidelines, …)\n"+
 			"  data     third-party data-science skills (Anthropic data skills, notebooks, EDA, ML, dbt, DuckDB)\n"+
-			"Run: claude-kit pack design --list   or   claude-kit pack data --list\n")
+			"  dotnet   third-party C#/.NET skills (modern C#, minimal APIs, architecture, EF Core, testing, Aspire, Akka.NET)\n"+
+			"Run: claude-kit pack design --list   or   claude-kit pack data --list   or   claude-kit pack dotnet --list\n")
 		return 0
 	}
 	scripts := map[string]string{
 		"design": "stacks/ts/.claude/kit/design-pack.sh",
 		"data":   "stacks/data/.claude/kit/data-pack.sh",
+		"dotnet": "stacks/cs/.claude/kit/dotnet-pack.sh",
 	}
 	script, ok := scripts[args[0]]
 	if !ok {
-		fmt.Fprintf(stderr, "claude-kit: unknown pack %q (available: design, data)\n", args[0])
+		fmt.Fprintf(stderr, "claude-kit: unknown pack %q (available: design, data, dotnet)\n", args[0])
 		return 2
 	}
 	dir, err := os.Getwd()
