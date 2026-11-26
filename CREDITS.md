@@ -33,6 +33,15 @@ The data pack (`data-pack.sh`, 1.6.0) works the same way. Licences checked on 20
 | [MotherDuck agent skills](https://github.com/motherduckdb/agent-skills) (`motherduck-duckdb-sql`) | DuckDB SQL syntax (data pack, duckdb) | MIT |
 | [Anthropic skills](https://github.com/anthropics/skills) (document skills) | docx/xlsx/pptx/pdf output; each user installs the plugin | Source-available (Anthropic's terms). Never copy it into a repository |
 
+The dotnet pack (`dotnet-pack.sh`, 1.7.0) works the same way. Licences checked on 2026-11-26 against each repository's LICENSE file:
+
+| Project | What it does for the kit | Licence |
+|---|---|---|
+| [Aaron Stannard's dotnet-skills](https://github.com/Aaronontheweb/dotnet-skills) | Modern C#, nullability, concurrency, project structure, NuGet, EF Core, testing (Testcontainers, Verify, CRAP), performance and AOT, OpenTelemetry, containers, Aspire, Akka.NET (dotnet pack: core, data, testing, performance, ops, aspire, akka) | MIT, Copyright (c) 2025 Aaron Stannard |
+| [Mukesh Murugan's dotnet-claude-kit](https://github.com/codewithmukesh/dotnet-claude-kit) | Minimal APIs, versioning, OpenAPI, errors, auth, HttpClient, resilience, caching, architecture styles, CI/CD, desktop (dotnet pack: api, architecture, ops, desktop) | MIT, Copyright (c) 2025 Mukesh Murugan |
+
+The kit's own `csharp.md` rule is written in its own words.
+
 When a pack copies skills or agents into a project, it also writes their upstream `LICENSE` (and `NOTICE`)
 and lists them in the project's `THIRD_PARTY_NOTICES.md`, so a public project can commit them with the required notices.
 

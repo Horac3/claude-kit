@@ -6,6 +6,18 @@
   work and questions for the owner. It only states what it can verify, marks gaps as `TODO (owner)`, changes no code
   and copies no secrets. User-only (`disable-model-invocation`), so it costs nothing until typed. Distinct from
   `/handoff`, which writes session notes into `docs/progress.md`.
+## 1.7.0 — 2026-11-26
+**C# and .NET.**
+- **C# stack (`cs`).** Detected from a `.sln`, `.slnx` or `.csproj` at the root or up to two folders down (ignoring
+  `bin/`, `obj/`, `node_modules/`), and combines with the other stacks. The commands name the root solution (`.slnx`
+  first), else the only root project, because `dotnet` refuses to guess between several; with neither they stay empty
+  and `commands.env` says why. `dotnet build` is the typecheck, `dotnet format --verify-no-changes` the format check,
+  and `dotnet test` (`--filter` for one test) is wired when a project references a test SDK or framework. Permissions
+  allow building and testing and ask before `dotnet add/new/tool/run/ef/publish`. Adds a path-scoped `csharp.md` rule.
+- **Dotnet pack.** `dotnet-pack.sh` / `claude-kit pack dotnet`: curated C# skills installed from upstream with their
+  licences, from [Aaron Stannard's dotnet-skills](https://github.com/Aaronontheweb/dotnet-skills) and
+  [Mukesh Murugan's dotnet-claude-kit](https://github.com/codewithmukesh/dotnet-claude-kit), both MIT. Packs: core, api,
+  architecture, data, testing, performance, ops, and aspire, akka and desktop when the project uses them.
 
 ## 1.6.0 — 2026-10-26
 **Python and data science.**

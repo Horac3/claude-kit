@@ -36,9 +36,10 @@ You need:
 | jq *(optional)* | `jq --version` | The hooks use jq if it's there, then fall back to python3, node, or a built-in parser. |
 | golangci-lint *(optional, Go)* | `golangci-lint --version` | Used for lint if installed; otherwise lint is a `gofmt -l` check. |
 | pytest, ruff, mypy or pyright *(Python)* | in the project's environment | Each is wired only if the project configures or depends on it; the others show `SKIP`. |
+| .NET SDK 6+ *(C#)* | `dotnet --version` | `dotnet build`, `test` and `format` are the checks. |
 
 The kit works with **Go**, **TypeScript/JavaScript** (pnpm, npm, yarn, or bun), **Python** (uv, poetry, pdm, pipenv or
-plain pip), or any mix of them in one repo. Data-science projects get an extra layer (see [8.3](#83-data-science-projects)).
+plain pip), **C#/.NET**, or any mix of them in one repo. Data-science projects get an extra layer (see [8.3](#83-data-science-projects)).
 
 ## 2. Get the kit
 
@@ -76,7 +77,7 @@ claude-kit init ~/code/my-project       # or, inside the project: claude-kit ini
 ```
 
 The installer works out the stack from `go.mod` / `package.json` / `pyproject.toml` (or `requirements*.txt`, `setup.py`,
-`Pipfile`, `environment.yml`) and the package manager or Python runner from your lockfile:
+`Pipfile`, `environment.yml`), a `.sln`/`.slnx`/`.csproj`, and the package manager or Python runner from your lockfile:
 
 ```
 claude-kit 1.0.0 → /home/you/code/my-project  (mode: install, stack: go)
@@ -96,7 +97,7 @@ Options:
 
 | Flag | Use it when |
 |---|---|
-| `--stack go\|ts\|py\|both` | Auto-detection is wrong, or the repo is empty (no project file yet). Several stacks: `--stack go,py`. `both` means `go,ts`. |
+| `--stack go\|ts\|py\|cs\|both` | Auto-detection is wrong, or the repo is empty (no project file yet). Several stacks: `--stack go,py`. `both` means `go,ts`. |
 | `--frontend` | A non-TypeScript project renders UI (e.g. a Go service with HTML templates) and you want `/ui`, `ui-checker` and the frontend rule. `--update` keeps it. |
 | `--data` | You want the data-science layer and it wasn't detected (it is automatic for Python projects that use pandas, polars, scikit-learn, DuckDB and the like, hold a notebook, or have a dbt project). `--update` keeps it. |
 | `--dry-run` | You want to see the plan without writing anything. |
@@ -368,6 +369,24 @@ For reports and decks, add Anthropic's document skills inside Claude Code with
 `/plugin install document-skills@anthropic-agent-skills`. They are source-available, so never commit their files.
 The README's [Python and data science](README.md#python-and-data-science) section lists every skill and why it was chosen.
 
+### 8.4 C# and .NET projects
+
+The `cs` stack builds and tests through the solution it found (check `.claude/kit/commands.env`; `/kickoff` verifies it).
+If your projects live only in subfolders with no root solution, the commands start empty: create one with
+`dotnet new sln` and `dotnet sln add`, or put your own `dotnet build path/To.sln` in `commands.env`.
+
+**Optional dotnet pack.** Curated third-party C# skills, installed from upstream with their licences (same rules as the other packs):
+
+```bash
+git add -A && git commit -m "wip"                 # the script refuses to run with uncommitted .claude/ changes
+.claude/kit/dotnet-pack.sh                        # see the plan for the core pack (modern C#, nullability, concurrency)
+.claude/kit/dotnet-pack.sh core api testing --apply   # also: architecture, data, performance, ops, aspire, akka, desktop, or all
+# same thing through the binary, from the project folder: claude-kit pack dotnet core --apply
+```
+
+Install only what the project uses: each skill adds its description to every session. The README's
+[C# and .NET](README.md#c-and-net) section lists every skill, its source, and what was left out.
+
 Useful built-in Claude Code commands that fit this workflow: `/context` (what is using your context), `/usage`
 (token use and cost), `/rewind` (undo to a checkpoint), `/hooks` (inspect hooks).
 
@@ -547,7 +566,7 @@ Yes. pnpm workspaces are detected and the commands use `pnpm -r --if-present run
 package-specific rules in path-scoped rule files (`paths: ["apps/api/**"]`).
 
 **My project is Rust, Kotlin, or another language.**
-Python is supported directly (`--stack py`). For other languages, install with the closest `--stack` (or `--stack go`
+Python and C# are supported directly (`--stack py`, `--stack cs`). For other languages, install with the closest `--stack` (or `--stack go`
 for a neutral setup), then set your real commands in `.claude/kit/commands.env` and add a path-scoped rule file for
 the language. Everything else (skills, agents, hooks, the loop) is language-independent.
 

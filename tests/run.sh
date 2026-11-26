@@ -668,6 +668,93 @@ grep "<!-- skill:jupyter-notebook -->" "$TPN2" | grep -q "Apache-2.0" && ok "not
 grep -q "maintained by claude-kit packs" "$TPN2" && grep -q "document-skills" "$TPN2" &&
   ok "notices header is shared by all packs and names the document skills plugin" || ko "shared notices header" "$(cat "$TPN2" 2>/dev/null)"
 
+echo "== installer: C# project (solution + test project)"
+CS="$WORK/csproj"; mkdir -p "$CS/src/App" "$CS/tests/App.Tests"; cd "$CS" || exit 1; git init -q
+: >App.slnx
+printf '<Project Sdk="Microsoft.NET.Sdk"></Project>\n' >src/App/App.csproj
+printf '<Project Sdk="Microsoft.NET.Sdk">\n  <ItemGroup>\n    <PackageReference Include="Microsoft.NET.Test.Sdk" />\n    <PackageReference Include="xunit" />\n  </ItemGroup>\n</Project>\n' >tests/App.Tests/App.Tests.csproj
+out="$("$KIT/install.sh" "$CS" 2>&1)"; rc=$?
+[ $rc -eq 0 ] && ok "C# install exits 0" || ko "C# install exits 0" "$out"
+contains "$out" "stack: cs" "detects the cs stack from a solution and .csproj files"
+[ -f .claude/rules/kit/csharp.md ] && [ -x .claude/kit/dotnet-pack.sh ] && ok "installs the csharp rule and the dotnet pack" || ko "cs stack files" "$out"
+[ ! -f .claude/rules/kit/go.md ] && [ ! -f .claude/rules/kit/frontend.md ] && [ ! -f .claude/rules/kit/python.md ] &&
+  ok "C#-only install adds no go, ts, python or frontend files" || ko "C#-only install is C#-only"
+env_file="$(cat .claude/kit/commands.env)"
+contains "$env_file" "CHECK_TYPECHECK='dotnet build App.slnx --nologo -v q'" "C#: typecheck builds the named solution"
+contains "$env_file" "CHECK_TEST='dotnet test App.slnx --nologo'" "C#: a test project wires dotnet test"
+contains "$env_file" "CHECK_TEST_ONE='dotnet test App.slnx --nologo --filter \"\$1\"'" "C#: test-one uses --filter"
+contains "$env_file" "CHECK_FORMAT='dotnet format App.slnx --verify-no-changes'" "C#: format check never writes"
+grep -qF 'Bash(dotnet test *)' .claude/settings.json && grep -qF 'Bash(.claude/kit/dotnet-pack.sh --list)' .claude/settings.json &&
+  ok "C# permissions allow dotnet test and listing the pack" || ko "C# permissions" "$(cat .claude/settings.json)"
+grep -qF 'Bash(dotnet add *)' .claude/settings.json && grep -qF 'Bash(npx *)' .claude/settings.json &&
+  ok "C#: adding packages and npx are ask-first" || ko "C# ask permissions" "$(cat .claude/settings.json)"
+! grep -qF 'Bash(go test *)' .claude/settings.json && ok "no go permissions in a C# project" || ko "no go permissions in a C# project"
+grep -qx 'stack=cs' .claude/kit/manifest && ok "manifest records stack=cs" || ko "manifest records stack=cs"
+out="$("$KIT/install.sh" --update "$CS" 2>&1)"
+contains "$out" "stack: cs" "update keeps the cs stack"
+grep -q '"\*\*/\*\.cs"' .claude/rules/kit/csharp.md && ok "csharp rule loads for .cs files" || ko "csharp rule paths"
+
+echo "== installer: C# edge cases"
+C2="$WORK/csnosln"; mkdir -p "$C2"; cd "$C2" || exit 1; git init -q
+printf '<Project Sdk="Microsoft.NET.Sdk.Web"></Project>\n' >"My Api.csproj"
+"$KIT/install.sh" "$C2" >/dev/null 2>&1
+env_file="$(cat .claude/kit/commands.env)"
+contains "$env_file" "CHECK_TYPECHECK='dotnet build \"My Api.csproj\" --nologo -v q'" "C#: the only root project is named, quoted when it has a space"
+contains "$env_file" "CHECK_TEST=''" "C#: no test project leaves the test command empty (SKIP)"
+C3="$WORK/csnested"; mkdir -p "$C3/src/A" "$C3/src/B"; cd "$C3" || exit 1; git init -q
+: >src/A/A.csproj; : >src/B/B.csproj
+"$KIT/install.sh" "$C3" >/dev/null 2>&1
+env_file="$(cat .claude/kit/commands.env)"
+contains "$env_file" "CHECK_TYPECHECK=''" "C#: nested projects without a root solution leave the build empty"
+contains "$env_file" "no solution or single project at the root" "C#: commands.env says why the dotnet commands are empty"
+C4="$WORK/csbin"; mkdir -p "$C4/bin/Debug"; cd "$C4" || exit 1; git init -q
+printf 'module example.com/x\n\ngo 1.22\n' >go.mod; : >bin/Debug/Stray.csproj
+out="$("$KIT/install.sh" "$C4" 2>&1)"
+contains "$out" "stack: go" "a .csproj under bin/ does not add the cs stack"
+! printf '%s' "$out" | grep -q 'stack: go,cs' && ok "build output is ignored by C# detection" || ko "bin/ detection" "$out"
+C5="$WORK/tscs"; mkdir -p "$C5/api"; cd "$C5" || exit 1; git init -q
+echo '{"name":"web","scripts":{"test":"vitest run"}}' >package.json; : >Shop.sln; : >api/Api.csproj
+out="$("$KIT/install.sh" "$C5" 2>&1)"
+contains "$out" "stack: ts,cs" "detects TypeScript and C# together"
+contains "$(cat .claude/kit/commands.env)" "(dotnet build Shop.sln --nologo -v q)" "ts+cs: the build joins both stacks"
+E2="$WORK/csempty"; mkdir -p "$E2"; cd "$E2" || exit 1; git init -q
+out="$("$KIT/install.sh" --stack cs "$E2" 2>&1)"
+contains "$out" "stack: cs" "--stack cs works on an empty repo"
+
+echo "== dotnet pack"
+cd "$CS" || exit 1
+git add -A >/dev/null && git -c user.email=t@t -c user.name=t commit -qm init
+out="$(.claude/kit/dotnet-pack.sh 2>&1)"; rc=$?
+[ $rc -eq 0 ] && ok "dotnet pack dry run exits 0" || ko "dotnet pack dry run exits 0" "$out"
+contains "$out" "Aaronontheweb/dotnet-skills --skill modern-csharp-coding-standards csharp-nullable-reference-types" "core pack plans Aaron Stannard's C# skills"
+contains "$out" "Nothing installed" "dotnet pack is a dry run by default"
+out="$(.claude/kit/dotnet-pack.sh api architecture 2>&1)"
+contains "$out" "codewithmukesh/dotnet-claude-kit --skill minimal-api" "api pack plans Mukesh Murugan's API skills"
+contains "$out" "codewithmukesh/dotnet-claude-kit --skill architecture-advisor clean-architecture vertical-slice ddd" "architecture pack plans the architecture skills"
+out="$(.claude/kit/dotnet-pack.sh aspire akka desktop 2>&1)"
+contains "$out" "no project references .NET Aspire" "aspire pack skipped without Aspire"
+contains "$out" "no project references Akka.NET" "akka pack skipped without Akka.NET"
+contains "$out" "desktop: skipped" "desktop pack skipped without a desktop project"
+DA="$WORK/csaspire"; mkdir -p "$DA/src/AppHost"
+printf '<Project>\n  <ItemGroup><PackageReference Include="Aspire.Hosting.AppHost" /><PackageReference Include="Akka.Hosting" /></ItemGroup>\n  <PropertyGroup><UseWPF>true</UseWPF></PropertyGroup>\n</Project>\n' >"$DA/src/AppHost/AppHost.csproj"
+out="$(CLAUDE_PROJECT_DIR="$DA" .claude/kit/dotnet-pack.sh aspire akka desktop 2>&1)"
+contains "$out" "--skill aspire-configuration" "aspire pack planned when a project references Aspire"
+contains "$out" "--skill akka-net-best-practices" "akka pack planned when a project references Akka.NET"
+contains "$out" "--skill avalonia desktop-mvvm" "desktop pack planned for a WPF project"
+out="$(.claude/kit/dotnet-pack.sh --list 2>&1)"
+contains "$out" "architecture" "--list describes the packs"
+expect_exit 2 "dotnet pack rejects an unknown pack" .claude/kit/dotnet-pack.sh nope
+FX3="$WORK/licfx3"; mkdir -p "$FX3/Aaronontheweb__dotnet-skills" "$FX3/codewithmukesh__dotnet-claude-kit"
+printf 'MIT License\n\nCopyright (c) 2025 Aaron Stannard <https://aaronstannard.com/>\n\nPermission is hereby granted, free of charge, to any person\n' >"$FX3/Aaronontheweb__dotnet-skills/LICENSE"
+printf 'MIT License\n\nCopyright (c) 2025 Mukesh Murugan\n\nPermission is hereby granted, free of charge, to any person\n' >"$FX3/codewithmukesh__dotnet-claude-kit/LICENSE"
+out="$(PATH="$FB:$PATH" CLAUDE_PROJECT_DIR="$CS" KIT_LICENSE_FIXTURES="$FX3" .claude/kit/dotnet-pack.sh core api --apply 2>&1)"; rc=$?
+[ $rc -eq 0 ] && ok "core + api --apply exits 0 with all licences fetched" || ko "dotnet pack --apply" "$out"
+grep -q "Aaron Stannard" .claude/skills/modern-csharp-coding-standards/LICENSE 2>/dev/null && ok "Aaron Stannard's skill gets his LICENSE" || ko "core LICENSE" "$out"
+grep -q "Mukesh Murugan" .claude/skills/minimal-api/LICENSE 2>/dev/null && ok "Mukesh Murugan's skill gets his LICENSE" || ko "api LICENSE" "$out"
+TPN3="$CS/THIRD_PARTY_NOTICES.md"
+grep "<!-- skill:minimal-api -->" "$TPN3" | grep -q "codewithmukesh/dotnet-claude-kit, MIT, Copyright (c) 2025 Mukesh Murugan" &&
+  ok "notices credit the source repo, licence and copyright" || ko "minimal-api notice" "$(cat "$TPN3" 2>/dev/null)"
+
 if [ "${KIT_TEST_TS:-0}" = 1 ] && command -v pnpm >/dev/null; then
   echo "== check runner: real TypeScript project (pnpm + vitest)"
   T="$WORK/tsproj"; mkdir -p "$T/src"; cd "$T" || exit 1; git init -q

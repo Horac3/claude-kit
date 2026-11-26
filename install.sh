@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # claude-kit installer and updater.
 #
-#   ./install.sh [--stack go|ts|py|both|auto] [--frontend] [--data] [--dry-run] [TARGET_DIR]   first install (default: .)
-#      --stack takes one stack or several, comma-separated (go,py). both is go,ts.
+#   ./install.sh [--stack go|ts|py|cs|both|auto] [--frontend] [--data] [--dry-run] [TARGET_DIR]   first install (default: .)
+#      --stack takes one stack or several, comma-separated (go,py). both is go,ts. cs is C#/.NET.
 #   ./install.sh --update [--frontend] [--data] [--dry-run] [TARGET_DIR]                    pull a newer kit into a project
 #
 # --frontend adds the frontend layer (frontend rule, /ui, ui-checker, shot.mjs, design-pack.sh) to any stack, e.g. a
@@ -125,7 +125,7 @@ install_project_file() { # <generated src> <rel>
 if [ "$mode" = "update" ] && [ "$stack" = "auto" ]; then
   prev="$(meta stack)"; [ -n "$prev" ] && stack="$prev"
 fi
-has_go=0 has_ts=0 has_py=0
+has_go=0 has_ts=0 has_py=0 has_cs=0
 [ -f "$target/go.mod" ] || [ -f "$target/go.work" ] && has_go=1
 [ -f "$target/package.json" ] && has_ts=1
 for f in pyproject.toml setup.py setup.cfg Pipfile environment.yml; do [ -f "$target/$f" ] && has_py=1; done
@@ -134,22 +134,28 @@ for f in pyproject.toml setup.py setup.cfg Pipfile environment.yml; do [ -f "$ta
 if [ $has_go -eq 0 ] && [ $has_ts -eq 0 ]; then
   for f in "$target"/requirements*.txt; do [ -f "$f" ] && has_py=1; done
 fi
+# C#/.NET: a solution or C# project file at the root or up to two folders down (src/App/App.csproj).
+cs_find() { # cs_find <find -name args...>: matching files, depth <= 3, skipping build output and dependencies
+  find "$target" -maxdepth 3 \( -name .git -o -name node_modules -o -name bin -o -name obj \) -prune -o \( "$@" \) -type f -print 2>/dev/null
+}
+[ -n "$(cs_find -name '*.sln' -o -name '*.slnx' -o -name '*.csproj' | head -1)" ] && has_cs=1
 if [ "$stack" = "auto" ]; then
   stack=""
   [ $has_go -eq 1 ] && stack="go"
   [ $has_ts -eq 1 ] && stack="${stack:+$stack,}ts"
   [ $has_py -eq 1 ] && stack="${stack:+$stack,}py"
+  [ $has_cs -eq 1 ] && stack="${stack:+$stack,}cs"
   [ "$stack" = "go,ts" ] && stack=both   # the name manifests and messages have always used
   if [ -z "$stack" ]; then
-    echo "Could not detect the stack (no go.mod, package.json or Python project file). Re-run with --stack go|ts|py (several: --stack go,py)." >&2
+    echo "Could not detect the stack (no go.mod, package.json, Python project file, .sln or .csproj). Re-run with --stack go|ts|py|cs (several: --stack go,py)." >&2
     exit 1
   fi
 fi
-bad_stack() { echo "--stack must be go, ts, py, both or auto (several: comma-separated, e.g. go,py)" >&2; exit 2; }
+bad_stack() { echo "--stack must be go, ts, py, cs, both or auto (several: comma-separated, e.g. go,py)" >&2; exit 2; }
 case "$stack" in "" | *[!a-z,]* | ,* | *, | *,,*) bad_stack ;; esac
 stacks=",${stack/both/go,ts},"   # membership list, e.g. ",go,py,"
 for s in $(printf '%s' "$stack" | tr ',' ' '); do
-  case "$s" in go | ts | py | both) ;; *) bad_stack ;; esac
+  case "$s" in go | ts | py | cs | both) ;; *) bad_stack ;; esac
 done
 has_stack() { case "$stacks" in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
@@ -188,6 +194,21 @@ elif [ -f "$target/package-lock.json" ]; then pm=npm
 fi
 [ "$mode" = "update" ] && [ -n "$(meta pm)" ] && pm="$(meta pm)"
 [ "$mode" = "update" ] && [ "$(meta frontend)" = 1 ] && frontend=1
+# C#: dotnet needs an explicit solution or project when the folder holds more than one (a .sln next to a .csproj
+# fails with MSB1011), so the commands always name one: the root solution (.slnx before .sln), else the only root
+# project. With neither, the commands stay empty and /kickoff fills them in.
+cs_root_file() {
+  local f
+  for f in "$target"/*.slnx "$target"/*.sln; do [ -f "$f" ] && { basename "$f"; return; }; done
+  set -- "$target"/*.csproj
+  [ $# -eq 1 ] && [ -f "$1" ] && basename "$1"
+  return 0
+}
+cs_has_tests() { # a test project: the test SDK, a test framework, or IsTestProject, in any project or central package file
+  [ -n "$(cs_find -name '*.csproj' -o -name 'Directory.Packages.props' -o -name 'Directory.Build.props' |
+    tr '\n' '\0' | xargs -0 grep -l -E 'Microsoft\.NET\.Test\.Sdk|"(xunit|xunit\.v3|NUnit|MSTest|MSTest\.TestFramework|TUnit)"|<IsTestProject>true' 2>/dev/null | head -1)" ]
+}
+
 has_stack ts && frontend=1   # stacks with TypeScript always get the frontend layer
 [ "$mode" = "update" ] && [ "$(meta data)" = 1 ] && data=1
 # Python projects that do data work get the data layer: a data library, a notebook, or a dbt project.
@@ -281,19 +302,29 @@ gen_commands() {
   # pytest exits 5 when it collects or selects no tests: not a failure (check.sh reports it as SKIP).
   if py_has_pytest; then py_test="$x pytest -q || [ \$? -eq 5 ]"; py_one="$x pytest -q -k \"\$1\" || [ \$? -eq 5 ]"; fi
 
+  # C#: build doubles as the typecheck (analyzers run there too); dotnet format checks style without writing.
+  local cs_tc="" cs_lint="" cs_test="" cs_one="" cs_fmt="" cs_f
+  cs_f="$(cs_root_file)"
+  if [ -n "$cs_f" ]; then
+    case "$cs_f" in *" "*) cs_f="\"$cs_f\"" ;; esac
+    cs_tc="dotnet build $cs_f --nologo -v q"; cs_fmt="dotnet format $cs_f --verify-no-changes"
+    if cs_has_tests; then cs_test="dotnet test $cs_f --nologo"; cs_one="dotnet test $cs_f --nologo --filter \"\$1\""; fi
+  fi
+
   # Combine the selected stacks: each target runs every stack's command (&&); empty ones are skipped.
   local tc="" lint="" test="" one="" fmt="" n=0 s
   join_and() { if [ -z "$1" ]; then echo "$2"; elif [ -z "$2" ]; then echo "$1"; else and_then "$1" "$2"; fi; }
-  for s in go ts py; do has_stack "$s" && n=$((n + 1)); done
+  for s in go ts py cs; do has_stack "$s" && n=$((n + 1)); done
   pick() { # pick <stack> <target>
     case "$1:$2" in
       go:tc) echo "$go_tc" ;; go:lint) echo "$go_lint" ;; go:test) echo "$go_test" ;; go:one) echo "$go_one" ;; go:fmt) echo "$go_fmt" ;;
       ts:tc) echo "$ts_tc" ;; ts:lint) echo "$ts_lint" ;; ts:test) echo "$ts_test" ;; ts:one) echo "$ts_one" ;; ts:fmt) echo "$ts_fmt" ;;
       py:tc) echo "$py_tc" ;; py:lint) echo "$py_lint" ;; py:test) echo "$py_test" ;; py:one) echo "$py_one" ;; py:fmt) echo "$py_fmt" ;;
+      cs:tc) echo "$cs_tc" ;; cs:lint) echo "$cs_lint" ;; cs:test) echo "$cs_test" ;; cs:one) echo "$cs_one" ;; cs:fmt) echo "$cs_fmt" ;;
     esac
   }
   local o
-  for s in go ts py; do
+  for s in go ts py cs; do
     has_stack "$s" || continue
     tc="$(join_and "$tc" "$(pick "$s" tc)")"; lint="$(join_and "$lint" "$(pick "$s" lint)")"
     test="$(join_and "$test" "$(pick "$s" test)")"; fmt="$(join_and "$fmt" "$(pick "$s" fmt)")"
@@ -308,6 +339,9 @@ gen_commands() {
 # Leave a value empty to skip that target.
 # Stack: $stack$(has_stack ts && printf ' · package manager: %s' "$pm")$(has_stack py && printf ' · python runner: %s' "$py_x")
 EOF
+  if has_stack cs && [ -z "$cs_tc" ]; then
+    echo "# C#: no solution or single project at the root, so the dotnet commands are empty. Add yours (dotnet build <sln>)."
+  fi
   echo "CHECK_TYPECHECK=$(q "$tc")"
   echo "CHECK_LINT=$(q "$lint")"
   if has_stack go; then
@@ -380,6 +414,14 @@ gen_settings() {
     esac
     ask+=("Bash(pip install *)" "Bash(pip3 install *)" "Bash(python -m pip install *)")
   fi
+  if has_stack cs; then
+    allow+=("Bash(dotnet build *)" "Bash(dotnet test *)" "Bash(dotnet format * --verify-no-changes*)" "Bash(dotnet restore *)"
+      "Bash(dotnet list *)" "Bash(dotnet --info)" "Bash(dotnet --version)" "Bash(dotnet --list-sdks)"
+      "Bash(.claude/kit/dotnet-pack.sh)" "Bash(.claude/kit/dotnet-pack.sh --list)")
+    ask+=("Bash(dotnet add *)" "Bash(dotnet remove *)" "Bash(dotnet new *)" "Bash(dotnet tool *)" "Bash(dotnet run *)"
+      "Bash(dotnet format *)" "Bash(dotnet ef *)" "Bash(dotnet publish *)" "Bash(dotnet nuget *)" "Bash(dotnet workload *)")
+    has_stack ts || [ "$frontend" -eq 1 ] || ask+=("Bash(npx *)")
+  fi
   cat <<EOF
 {
   "\$schema": "https://json.schemastore.org/claude-code-settings.json",
@@ -433,7 +475,7 @@ fi
 while IFS= read -r -d '' f; do
   install_kit_file "$f" "${f#"$KIT_DIR/kit/"}"
 done < <(find "$KIT_DIR/kit" -type f -print0 | sort -z)
-for s in go ts py; do
+for s in go ts py cs; do
   if has_stack "$s"; then
     while IFS= read -r -d '' f; do
       install_kit_file "$f" "${f#"$KIT_DIR/stacks/$s/"}"

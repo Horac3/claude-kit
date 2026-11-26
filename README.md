@@ -1,6 +1,6 @@
 # claude-kit
 
-A drop-in Claude Code setup for Go, TypeScript and Python projects, including data science. It focuses on four things:
+A drop-in Claude Code setup for Go, TypeScript, Python and C#/.NET projects, including data science. It focuses on four things:
 
 - **Token economy.** A small always-loaded context, rules that load only when relevant files are touched, and test output filtered before Claude sees it.
 - **Model routing.** Opus plans, Sonnet builds, and Haiku runs checks. Escalation happens through subagents, never by switching the main model mid-conversation.
@@ -113,6 +113,7 @@ docs/data.md                       project  — data sources, grain, definitions
 .claude/agents/{test-runner,reviewer,researcher,debugger}.md                        kit
 .claude/skills/ui/SKILL.md · agents/ui-checker.md · kit/shot.mjs · kit/design-pack.sh   kit  — ts and both stacks, or any stack with --frontend
 .claude/skills/assumptions/SKILL.md · kit/data-pack.sh                              kit  — data layer (see below)
+.claude/kit/dotnet-pack.sh                                                          kit  — cs stack (see C# and .NET)
 .claude/kit/pack-lib.sh                                                             kit  — shared by the optional packs
 .claude/rules/kit/working-rules.md   always     safety, working loop, test rules
 .claude/rules/kit/model-routing.md   always     the table above + token rules
@@ -121,6 +122,7 @@ docs/data.md                       project  — data sources, grain, definitions
 .claude/rules/kit/go.md              on demand  **/*.go            (go and both stacks)
 .claude/rules/kit/typescript.md      on demand  **/*.ts(x), package.json, tsconfig   (ts and both stacks)
 .claude/rules/kit/python.md          on demand  **/*.py, pyproject.toml, requirements*.txt, conftest.py   (py stack)
+.claude/rules/kit/csharp.md          on demand  **/*.cs, *.csproj, *.sln(x), Directory.*.props   (cs stack)
 .claude/rules/kit/data-science.md    on demand  **/*.ipynb, notebooks/, analysis/, *.sql, dbt models, data/   (data layer)
 .claude/rules/kit/frontend.md        on demand  **/*.{tsx,jsx,vue,svelte,css,scss,html,tmpl,gohtml,templ}  (ts and both stacks, or --frontend)
 ```
@@ -249,6 +251,45 @@ A few defaults come from the author's own setup. Change them if they don't fit y
 | `go test -race` (and other cgo/native builds) run only in CI or Docker, because the author's machine has no C compiler | `.claude/rules/kit/go.md`, `.claude/rules/kit/docker.md` | If you have a C compiler, delete those lines and add `-race` to `CHECK_TEST` in `.claude/kit/commands.env`. |
 | Every `rm` (and `rmdir`, `unlink`, `shred`) is blocked, even on build output | `.claude/hooks/guard-bash.sh` (first `check` line) and the `Bash(rm *)` entries in `.claude/settings.json` `permissions.deny` | Edit both yourself; Claude is blocked from editing hooks and settings. Or keep the block and run deletes with `!`. |
 
+## C# and .NET
+
+**C#** is a stack too (`cs`). It's detected from a `.sln`, `.slnx` or `.csproj` at the root or up to two folders down
+(build output under `bin/` and `obj/` is ignored), and combines with the others (`ts,cs` for a web front end next to an API).
+`dotnet` needs to be told which solution to use when a folder holds more than one, so the commands always name one: the
+root `.slnx` or `.sln`, else the only root `.csproj`. With neither (projects only in subfolders), the commands stay empty
+and `/kickoff` fills them in. `dotnet build` is the typecheck, `dotnet format --verify-no-changes` the format check, and
+`dotnet test` (with `--filter` for a single test) is wired when a project references the test SDK, xUnit, NUnit, MSTest or
+TUnit. Permissions allow building and testing and ask before `dotnet add`, `new`, `tool`, `run`, `ef` and `publish`.
+The `csharp.md` rule covers nullable references, async, immutability, DI, options, logging, EF Core and tests.
+
+**Dotnet pack (optional).** Like the other packs, `dotnet-pack.sh` installs curated third-party C# skills from upstream,
+writes each one's licence next to it, and lists them in `THIRD_PARTY_NOTICES.md`. Both sources are MIT.
+
+```bash
+.claude/kit/dotnet-pack.sh                    # show the plan for the core pack (installs nothing)
+.claude/kit/dotnet-pack.sh core api testing --apply
+.claude/kit/dotnet-pack.sh --list             # core, api, architecture, data, testing, performance, ops, aspire, akka, desktop
+claude-kit pack dotnet core                   # the same, from the binary
+```
+
+| Pack | Skills | Source |
+|---|---|---|
+| core | modern C# coding standards, nullable reference types, concurrency patterns, project structure (`.slnx`, `Directory.Build.props`, CPM), NuGet package management | [Aaron Stannard's dotnet-skills](https://github.com/Aaronontheweb/dotnet-skills) |
+| api | minimal APIs, API versioning, OpenAPI, error handling, authentication, `HttpClient` factory, resilience, caching | [Mukesh Murugan's dotnet-claude-kit](https://github.com/codewithmukesh/dotnet-claude-kit) |
+| architecture | architecture advisor, clean architecture, vertical slices, DDD | dotnet-claude-kit |
+| data | EF Core patterns, database performance | dotnet-skills |
+| testing | Testcontainers integration tests, Verify snapshot tests, CRAP coverage analysis | dotnet-skills |
+| performance | type design for performance, AOT and trimming, serialization | dotnet-skills |
+| ops | OpenTelemetry instrumentation, SDK container publishing (dotnet-skills); CI/CD (dotnet-claude-kit) | both |
+| aspire | Aspire configuration, service defaults, integration testing, Mailpit; only when a project references Aspire | dotnet-skills |
+| akka | Akka.NET best practices, testing, hosting, management, Aspire config; only when a project references Akka.NET | dotnet-skills |
+| desktop | Avalonia, desktop MVVM; only for Avalonia, WPF, WinForms, MAUI or MVVM Toolkit projects | dotnet-claude-kit |
+
+Left out on purpose: dotnet-claude-kit's workflow skills (`plan`, `tdd`, `code-review`, `verify`, `checkpoint`, `wrap-up`
+and similar), agents, hooks and MCP server, because they duplicate the kit's own loop and guards; its `ef-core` skill,
+which overlaps dotnet-skills' `efcore-patterns`; and dotnet-skills' marketplace-maintenance skills. If you prefer all of
+Aaron Stannard's skills and agents, install them per user as a plugin: `/plugin marketplace add Aaronontheweb/dotnet-skills`.
+
 Editing a kit file is safe: `--update` sees that it is modified, leaves your version in place and writes the new kit version
 next to it as `<file>.kit-new`.
 
@@ -259,6 +300,7 @@ next to it as `<file>.kit-new`.
 - Optional: `jq`. The hooks fall back to python3, then node, then a regex parser.
 - Go projects: `golangci-lint` is used if installed; otherwise lint falls back to a `gofmt -l` check.
 - Python projects: pytest, ruff and mypy/pyright, installed in the project's environment. Whatever isn't configured is skipped.
+- C# projects: the .NET SDK (6 or later, for `dotnet format`).
   `go test -race` needs cgo and a C compiler, so the kit leaves it to CI or Docker.
 
 ## Existing projects
