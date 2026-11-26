@@ -121,7 +121,7 @@ Check that everything loaded:
 
 - **Status line:** you should see something like `Opus · ctx 3% · $0.00 · main* · Step 1: …` at the bottom.
 - **Hooks:** run `/hooks` and look for `guard-bash.sh` and `guard-files.sh` under PreToolUse, and `session-context.sh` under SessionStart.
-- **Commands:** type `/` and look for `/kickoff`, `/next`, `/tdd`, `/fix`, `/review`, `/decide`, `/commit`, `/handoff`.
+- **Commands:** type `/` and look for `/kickoff`, `/next`, `/tdd`, `/fix`, `/review`, `/decide`, `/commit`, `/handoff`, `/handover`.
 
 ## 5. Commit the setup
 
@@ -275,6 +275,7 @@ Use these on their own, outside the `/next` loop:
 | `/decide <question>` | `/decide Postgres advisory locks vs a Redis lock for the purge job` | Opus weighs the options in a separate context and returns a decision record. Approve it to append to `docs/decisions.md`. |
 | `/commit [note]` | `/commit` | Grouped Conventional Commits; you confirm each. |
 | `/handoff` | `/handoff` | Write state to `docs/progress.md` now. |
+| `/handover [successor]` | `/handover Thoko` | Write `HANDOVER.md` for a person taking over the project: status, architecture, run and deploy, runbook, open work, and a list of questions only you can answer. It changes no code and copies no secrets. Not the same as `/handoff`, which is for the next session. |
 | `/remap [area\|full]` | `/remap` | Refresh `docs/architecture.md` from what changed in git since it was last mapped. Run it when the session start says the map is stale, or after a big restructure. |
 | `/assumptions <analysis>` *(data layer)* | `/assumptions churn model in notebooks/churn.ipynb` | A cold, read-only Opus audit of what a result silently relies on, with a verdict. Approve it to save to `docs/assumptions.md`. See [§8.3](#83-data-science-projects). |
 | `/ui <screen>` *(TS projects)* | `/ui booking form with date picker and confirmation` | A short design brief, then a test-first build, then a screenshot check at desktop and mobile widths by the `ui-checker` subagent. See [§8.1](#81-frontend-work-ui). |
@@ -545,7 +546,7 @@ The installer never deletes, so uninstalling is manual. These are the kit's file
 
 ```bash
 # Review this list first: git rm keeps everything in history, so you can always get it back.
-git rm -r .claude/skills/{kickoff,next,tdd,fix,handoff,review,decide,commit,remap} \
+git rm -r .claude/skills/{kickoff,next,tdd,fix,handoff,handover,review,decide,commit,remap} \
           .claude/agents/{test-runner,reviewer,researcher,debugger}.md \
           .claude/skills/ui .claude/agents/ui-checker.md \
           .claude/hooks .claude/kit .claude/rules/kit
