@@ -5,7 +5,7 @@ This is the handoff for whoever (human or Claude) works on the kit. Read it firs
 
 ## What the kit is
 
-claude-kit is a Claude Code setup you install into Go and TypeScript projects, designed around four goals:
+claude-kit is a Claude Code setup you install into Go, TypeScript, Python and C# projects, designed around four goals:
 
 - **Token economy:** a small always-loaded context, rules that load only for matching paths, and filtered tool output.
 - **Model routing by delegation:** `opusplan` in the main session, with Haiku, Sonnet and Opus subagents for checks, search, debugging and review. Never switch the main model mid-conversation.
@@ -27,14 +27,15 @@ kit/.claude/                 installed into every project (kit-owned, updatable)
 stacks/go/.claude/           go.md rule
 stacks/ts/.claude/           typescript.md, frontend.md rules; /ui skill; ui-checker agent; shot.mjs; design-pack.sh
 stacks/py/.claude/           python.md rule
+stacks/cs/.claude/           csharp.md rule; dotnet-pack.sh
 stacks/data/.claude/         data layer: data-science.md rule, /assumptions skill, data-pack.sh
 kit/.claude/kit/pack-lib.sh  shared plan/--apply/licence-notices machinery, sourced by design-pack.sh and data-pack.sh
 scaffold/                    project-owned files created once: CLAUDE.md, docs/{progress,decisions,requirements}.md;
                              docs/data.md with the data layer
 examples/tally/              fictional project showing a migrated CLAUDE.md and path-scoped rules
-tests/run.sh                 self-tests (248); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
+tests/run.sh                 self-tests (288); KIT_TEST_TS=1 adds a real pnpm + vitest project (fails if pnpm is missing)
 go.mod, kitfs.go             Go module github.com/horac3/claude-kit; kitfs.go embeds install.sh, VERSION, kit/, stacks/, scaffold/
-cmd/claude-kit/              the CLI: init, update, pack design, pack data, version. Unpacks the embedded kit to a temp dir and runs
+cmd/claude-kit/              the CLI: init, update, pack design, pack data, pack dotnet, version. Unpacks the embedded kit to a temp dir and runs
                              install.sh or a pack script with bash (Git Bash on Windows). main_test.go proves `init`
                              installs exactly what install.sh installs.
 npm/claude-kit/              npm launcher package (bin/claude-kit.js runs the platform binary)
@@ -45,7 +46,7 @@ npm/build.mjs                builds the launcher + 6 platform packages from GoRe
 ```
 
 `install.sh` generates `.claude/settings.json` and `.claude/kit/commands.env` per stack and package manager, in `gen_settings` and `gen_commands`.
-Stacks combine: `$stack` is `go`, `ts`, `py`, `both` (go,ts, kept for old manifests) or a comma list, and every check goes
+Stacks combine: `$stack` is `go`, `ts`, `py`, `cs`, `both` (go,ts, kept for old manifests) or a comma list, and every check goes
 through `has_stack <name>`, never a comparison with `$stack`. Each target's command is the selected stacks' commands joined
 with `&&`, skipping empty ones; a stack's tool that the project doesn't configure stays empty, so `check.sh` shows SKIP.
 
@@ -71,7 +72,7 @@ with `&&`, skipping empty ones; a stack's tool that the project doesn't configur
    - Screenshots are viewed only by the `ui-checker` subagent.
    - Long third-party rule fetches (Vercel guidelines) run in a subagent.
 6. **Skill `!` injection blocks must not fail.** A non-zero exit aborts the whole skill, so end them with `true` or a pipe to `head`.
-7. **Third-party skills are installed from upstream by the pack scripts (`design-pack.sh`, `data-pack.sh`), never vendored.** Both source `pack-lib.sh`. It is a dry run by default and refuses to run with uncommitted `.claude/` changes.
+7. **Third-party skills are installed from upstream by the pack scripts (`design-pack.sh`, `data-pack.sh`, `dotnet-pack.sh`), never vendored.** Both source `pack-lib.sh`. It is a dry run by default and refuses to run with uncommitted `.claude/` changes.
    - With `--apply` it writes each copied skill's or agent's upstream `LICENSE` (and `NOTICE`) and never overwrites an existing one.
    - In `THIRD_PARTY_NOTICES.md` it owns only the block between the `claude-kit:third-party` markers. Re-runs keep one entry per item, updated in place, and leave everything outside the block byte for byte.
    - It stays bash 3.2-safe (CI runs it on macOS): no associative arrays, and possibly-empty arrays are expanded as `${a[@]+"${a[@]}"}`.
@@ -91,6 +92,7 @@ with `&&`, skipping empty ones; a stack's tool that the project doesn't configur
 | `impeccable detect` in `ui-checker` | A deterministic scan for generic "AI-made" design patterns that costs no model tokens. Verified on a test page: 7 findings. |
 | Licence notices written at install time | Upstream installers copy skills and agents without their LICENSE files, so a public project would redistribute MIT/Apache files without the required notices. The SPDX id comes from matching the licence text, not the GitHub API, which is rate-limited when unauthenticated. |
 | Design pack is opt-in | Each model-invocable skill adds its description to every session (core adds 3, all about 8). Taste skills overlap, so keep one main voice. |
+| C# skills come from a pack (1.7.0), not copied into the kit | Both upstreams are MIT, so vendoring was allowed, but invariant 7 keeps the kit free of third-party files: the pack installs current upstream versions with their licences. dotnet-claude-kit's workflow skills, agents, hooks and MCP server are left out because they duplicate the kit's loop. |
 | Bash only (Git Bash or WSL on Windows) | One implementation to test. `.gitattributes` forces LF so scripts survive Windows clones; `install.sh` appends the same rule to each project, because CRLF hooks fail open under Linux bash. |
 
 ## Verified vs not verified
@@ -113,7 +115,12 @@ with `&&`, skipping empty ones; a stack's tool that the project doesn't configur
   each with its upstream LICENSE (OpenAI's from inside the skill folder) and a correct notices entry; nothing left outside `.claude/`.
 - 1.6.0: go, ts and both installs produce byte-identical `commands.env` and `settings.json` to 1.5.1.
 
+- 1.7.0: all 288 self-tests pass on Linux and shellcheck is clean; `go test ./...` passes, including `pack dotnet` from the binary.
+
 **Not verified:**
+- **The dotnet pack against upstream.** The build sandbox could not run `npx skills add`, so only the plans and the licence
+  handling (with fixtures) are tested. Skill names were checked against each upstream `SKILL.md` on 2026-11-26.
+- **The cs stack's commands against a real .NET SDK.** No SDK in the build sandbox; the command shapes follow the dotnet CLI docs.
 - **Impeccable's installer.** The build sandbox couldn't reach impeccable.style. Its `detect` CLI did work.
 - **macOS's bash 3.2.** `install.sh` uses arrays and `${var//}`, which should be fine, but it hasn't been run. Git for Windows' MSYS bash (as opposed to Cygwin bash) is also untested.
 - **`/kickoff` and `/remap` end to end with a human.** They are interactive, so only their scripts and structure are tested.
